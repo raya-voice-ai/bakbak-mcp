@@ -7,3 +7,5 @@ mcpb-build/
 .env.*
 *.log
 .DS_Store
+dist-bundle/
+!.env.example

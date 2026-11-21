@@ -1,0 +1,56 @@
+# Hosted Bakbak MCP server on a host whose edge reverse proxy (Caddy) runs in
+# Docker on the external network `bakbak-kong_public` and forwards
+# mcp.bakbak.si to http://bakbak-mcp:8080. See deploy/README.md.
+#
+#   cd deploy && cp .env.example .env   # then set MCP_TOKEN_SECRET
+#   docker compose up -d --build
+name: bakbak-mcp
+
+services:
+  bakbak-mcp:
+    image: bakbak-mcp:latest
+    build:
+      context: ..
+      # Needed only while package.json depends on "file:../bakbak-js": a checkout
+      # of the SDK next to this repository. Remove once it uses the published SDK.
+      additional_contexts:
+        bakbak-js: ../../bakbak-js
+    container_name: bakbak-mcp
+    restart: unless-stopped
+    environment:
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-https://mcp.bakbak.si}
+      MCP_TOKEN_SECRET: ${MCP_TOKEN_SECRET:?set MCP_TOKEN_SECRET in deploy/.env}
+      BAKBAK_BASE_URL: ${BAKBAK_BASE_URL:-https://hub.getraya.app}
+      AUDIO_DIR: /data/audio
+      AUDIO_TTL: ${AUDIO_TTL:-1h}
+      AUDIO_MAX_BYTES: ${AUDIO_MAX_BYTES:-2G}
+      PORT: '8080'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # TRUSTED_PROXIES is left unset: the default (loopback and private ranges)
+      # covers the Docker network the edge proxy reaches this container on.
+    expose:
+      - '8080'
+    volumes:
+      - audio:/data/audio
+    networks:
+      - edge
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '5'
+
+volumes:
+  audio:
+
+networks:
+  edge:
+    name: bakbak-kong_public
+    external: true

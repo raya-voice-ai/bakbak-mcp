@@ -27,3 +27,8 @@ export async function bundleServer(outfile) {
     logLevel: 'warning',
   });
 }
+
+// `node scripts/bundle.mjs <outfile>` (used by the Dockerfile).
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  await bundleServer(path.resolve(process.argv[2] ?? 'dist-bundle/server.mjs'));
+}

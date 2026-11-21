@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+dist
+dist-bundle
+mcpb-build
+coverage
+*.mcpb
+.env
+.env.*
+test
+conformance
+deploy
+assets

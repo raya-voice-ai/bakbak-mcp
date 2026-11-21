@@ -27,6 +27,7 @@ afterAll(async () => {
 beforeEach(async () => {
   api.requests.length = 0;
   api.intercept = undefined;
+  api.delayMs = 0;
   h = await connectLocal(api.baseURL);
 });
 afterEach(async () => {
@@ -495,5 +496,27 @@ describe('include_audio', () => {
     const files = await readdir(h.outputDir);
     expect(files).toHaveLength(1);
     expect(message).toContain(path.join(h.outputDir, files[0]!));
+  });
+});
+
+describe('cancellation', () => {
+  it('stops a long synthesis when the client cancels the call', async () => {
+    api.delayMs = 300; // per piece
+    const controller = new AbortController();
+    const text = Array.from({ length: 240 }, () => SENTENCE).join(' ');
+    const pending = h.client.callTool(
+      { name: 'text_to_speech', arguments: { text, language: 'hi' } },
+      {
+        signal: controller.signal,
+      },
+    );
+    await new Promise((r) => setTimeout(r, 100));
+    controller.abort();
+    await expect(pending).rejects.toThrow();
+    // Give the server a moment to see the cancellation, then nothing more is sent.
+    await new Promise((r) => setTimeout(r, 1200));
+    // The context was cancelled on the WebSocket, and no file was written.
+    expect(api.synthesisRequests().some((r) => r.body?.cancel === true)).toBe(true);
+    expect(await readdir(h.outputDir)).toEqual([]);
   });
 });

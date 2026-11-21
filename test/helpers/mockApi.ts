@@ -290,6 +290,7 @@ export async function startMockApi(): Promise<MockApi> {
         const n = ++seq;
         const requestId = `req_${n}`;
         const run = async (): Promise<void> => {
+          if (api.delayMs > 0) await new Promise((r) => setTimeout(r, api.delayMs));
           const override = api.intercept?.(recorded);
           if (override) {
             ws.send(

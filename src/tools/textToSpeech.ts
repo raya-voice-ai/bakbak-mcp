@@ -239,6 +239,11 @@ export async function textToSpeech(
       structuredContent: output,
     };
   } catch (error) {
+    if (signal.aborted) {
+      // The client cancelled the call; nobody reads this result.
+      log.info('cancelled', { request_ids: requestIds });
+      return toolError({ message: 'The call was cancelled.', next_step: 'None.' });
+    }
     if (error instanceof DeliveryError || error instanceof SynthesisInputError) {
       return toolError({
         message: error.message,

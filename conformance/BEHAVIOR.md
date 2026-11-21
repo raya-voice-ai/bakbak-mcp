@@ -454,6 +454,11 @@ and the vectors avoid them.
   third-party exceptions they wrap: drop or sanitise such causes.
 - A key that is empty or contains whitespace or control characters is refused
   at construction with a `BakbakError` that says so without echoing the key.
+- **Never follow redirects**, on HTTP requests or the WebSocket handshake: the
+  API never redirects, and following one would hand `X-API-Key` (a custom header
+  that `fetch` and several WebSocket libraries keep on cross-origin hops) to
+  another origin. A 3xx is returned to the caller as an `APIStatusError` with its
+  status.
 - The JavaScript SDK refuses to run in a browser with a raw API key unless the
   caller passes `dangerouslyAllowBrowser: true`, and says why: the key would be
   visible to anyone using the page.

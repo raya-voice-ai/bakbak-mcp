@@ -192,9 +192,20 @@ the API key or request headers.
 ### 3.2 The message
 
 First non-empty of: the body's `message` (string); the body's `detail` when it is
-a string; the body's `detail` list rendered as `"<loc without 'body'> : <msg>"`
-joined with `"; "` (e.g. `voice_id: Field required; output_format.encoding: Value
-error, …`); the body's `error`; the HTTP reason phrase; `"HTTP <status>"`.
+a string; the body's `detail` list rendered (below); the body's `error`; the HTTP
+reason phrase; `"HTTP <status>"`.
+
+Rendering a `detail` list: each entry becomes `<loc>: <msg>`, where `<loc>` is the
+entry's `loc` without a leading `"body"`, joined with `.`; an entry with no `loc`
+is just its `msg`; a string entry is itself; empty renderings are skipped. The
+entries are joined with `"; "`, e.g. `voice_id: Field required;
+output_format.encoding: Value error, …`.
+
+When the message is the body's `message` and the body also has a `detail` list
+whose rendering is not already a substring of it, the rendering is appended:
+`"<message> <rendering>"` if the message ends with `.`, `!` or `?`, else
+`"<message>: <rendering>"`. A generic sentence ("The request is malformed or
+invalid.") would otherwise hide which field is wrong.
 
 ### 3.3 Retryable
 
@@ -253,7 +264,8 @@ record the waits; fixtures list them as `[min, max]` pairs.
 | total timeout | none | optional per call |
 
 A timeout before any audio raises `APITimeoutError` (retryable); after audio,
-`StreamInterruptedError`. A whole-file call holds no audio until its body starts,
+`StreamInterruptedError`. Where the platform cannot time connecting separately
+(`fetch`), the read timeout covers it. A whole-file call holds no audio until its body starts,
 so its read timeout runs from the request to the first byte, then between bytes.
 
 ---
@@ -267,9 +279,11 @@ so its read timeout runs from the request to the first byte, then between bytes.
 - The payload's `type` is authoritative; the `event:` name is a hint. Ignore
   unknown types (forward compatibility).
 - Decode each chunk's base64 exactly once, into bytes. Never hand base64 to users.
-- A stream must end with `done` or `error`. End of body without either **must**
-  raise `StreamInterruptedError` (`status` none, `retryable` true). Never return a
-  short stream as success.
+- A stream must end with `done` or `error`. End of body without either, after
+  some audio, **must** raise `StreamInterruptedError` (`status` none, `retryable`
+  true). Never return a short stream as success. With no audio at all it is a
+  connection failure: retried under §4.2, and after the last attempt
+  `StreamInterruptedError` with `audio_bytes` 0.
 - Use no line-length limit below 16 MiB; one chunk's base64 can be large.
 
 ### 5.2 Audio helpers
@@ -330,8 +344,9 @@ so its read timeout runs from the request to the first byte, then between bytes.
 
 `ctx.cancel()` sends `{"context_id","cancel":true}` and resolves when the
 `cancelled` message arrives. Every unfinished request of the context ends as
-`Cancelled`. Audio for the context that arrives between the cancel and its
-acknowledgement is discarded, never delivered. The context stays usable: a
+`Cancelled`. The context's audio that was received but not yet handed to the
+caller, and audio that arrives between the cancel and its acknowledgement, is
+discarded, never delivered: a cancel means silence now. The context stays usable: a
 `send` after `cancel()` resolves runs normally. Cancelling a context with nothing
 unfinished resolves at once without sending anything.
 
@@ -346,7 +361,7 @@ flight on two connections at once.
 |---|---|
 | close 1000 (idle) | Nothing was in progress. Mark closed; the next `send` reconnects. Not an error. |
 | close 1001 (going away) | Reconnect at once. Every request with no terminal message and no audio is resent, in its context's order, on the new connection, exactly once. Doesn't count against `max_retries`. |
-| a 503 refusal saying the connection is draining (`error_code` `service_unavailable`, or a message containing "Reconnect and send the request again") | Stop sending on this connection. The refused request is held, with any later requests of its context, and resent on a new connection when the old one closes (1001) — not retried on the draining one. |
+| a 503 refusal saying the connection is draining (`error_code` `service_unavailable`, or a message containing "Reconnect and send the request again") | Stop sending on this connection; new contexts go to a new one. The refused request is held, with any later requests of its context, and resent in order on the new connection as soon as the context has nothing unfinished on the draining one (at the latest when it closes with 1001), never retried on the draining one. Doesn't count against `max_retries`. |
 | close 1008 or 1009 | The client broke a rule. Fail every unfinished request with `WebSocketClosedError` (not retryable). |
 | any other close or a dropped socket | Requests that had audio fail with `StreamInterruptedError`; those with none are resent on a new connection. The first reconnect is immediate; later ones back off (§4.3) and count against `max_retries`. |
 | a retryable `error` before any audio, not a draining signal | If no later request of the same context has been sent, wait (§4.3) and resend it on the same context. Otherwise deliver the error: resending would break the context's order. |
@@ -371,6 +386,9 @@ The segmenter is specified by `conformance/segmenter/reference.py` and tested by
   flushing, gives the same sentences as splitting it whole (test with one piece,
   one code point per piece, and several random cuts);
 - measure lengths in Unicode code points, never UTF-16 units;
+- keep enough already-emitted text for look-behind when trimming the streaming
+  buffer (see `_keep_from` in the reference), or the invariant breaks after a
+  hard cut or before a list marker;
 - expose the options `min_chars` (20), `first_min_chars` (1), `max_chars` (400),
   `eager_first_clause` (false) and `first_clause_min_chars` (24), named in each
   language's style.

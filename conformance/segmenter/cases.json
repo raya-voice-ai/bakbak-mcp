@@ -409,6 +409,46 @@
         "Open https://example.com/a.b/c.html now.",
         "Then press enter."
       ]
+    },
+    {
+      "name": "lookbehind_list_marker",
+      "options": {
+        "min_chars": 0
+      },
+      "input": "ok1.. 1. 1",
+      "sentences": [
+        "ok1..",
+        "1.",
+        "1"
+      ]
+    },
+    {
+      "name": "lookbehind_word_after_hard_cut",
+      "options": {
+        "max_chars": 10,
+        "min_chars": 0
+      },
+      "input": "abcdefghidr. Next sentence is here.",
+      "sentences": [
+        "abcdefghid",
+        "r.",
+        "Next",
+        "sentence",
+        "is here."
+      ]
+    },
+    {
+      "name": "lookbehind_digits_after_hard_cut",
+      "options": {
+        "max_chars": 10,
+        "min_chars": 0
+      },
+      "input": "abcdefghi12. Next one.",
+      "sentences": [
+        "abcdefghi1",
+        "2.",
+        "Next one."
+      ]
     }
   ]
 }

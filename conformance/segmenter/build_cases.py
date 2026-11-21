@@ -13,6 +13,12 @@ import random
 
 from reference import VERSION, Options, Segmenter, split_sentences
 
+
+class _WholeText(Segmenter):
+    """The oracle's oracle: never trims its buffer, so every look-behind sees the whole text."""
+
+    _trim = False
+
 # (name, input, options-overrides). Inputs are real-looking agent replies.
 INPUTS: list[tuple[str, str, dict]] = [
     ("hindi_danda", "आपका पैकेज आज शाम तक पहुँच जाएगा। राहुल आपको कॉल करेगा।", {}),
@@ -60,6 +66,10 @@ INPUTS: list[tuple[str, str, dict]] = [
     ("rupee_abbrev", "आपका बिल Rs. 450 है। कृपया रु. 450 का भुगतान आज करें।", {}),
     ("crlf", "पहली पंक्ति।\r\nदूसरी पंक्ति।\r\n", {}),
     ("url_and_path", "Open https://example.com/a.b/c.html now. Then press enter.", {}),
+    # Look-behind across what a streaming segmenter has already emitted:
+    ("lookbehind_list_marker", "ok1.. 1. 1", {"min_chars": 0}),
+    ("lookbehind_word_after_hard_cut", "abcdefghidr. Next sentence is here.", {"max_chars": 10, "min_chars": 0}),
+    ("lookbehind_digits_after_hard_cut", "abcdefghi12. Next one.", {"max_chars": 10, "min_chars": 0}),
 ]
 
 
@@ -84,6 +94,8 @@ def main() -> None:
     for name, text, overrides in INPUTS:
         opts = Options(**overrides)
         expected = split_sentences(text, opts)
+        whole = _WholeText(opts)
+        assert whole.push(text) + whole.flush() == expected, (name, "batch differs from whole text")
         for pieces in chunkings(text, rng):
             seg = Segmenter(opts)
             got: list[str] = []

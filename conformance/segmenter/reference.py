@@ -287,13 +287,35 @@ def _wrap_cut(text: str, start: int, max_chars: int) -> int:
     return cut if cut > start + 1 else window_end
 
 
+def _keep_from(text: str, gs: int) -> int:
+    """How much text before the group start a streaming segmenter must keep.
+
+    Two decisions look behind the group start: the word before a "." (which,
+    after a hard cut, began before the group) and whether a list marker sits at
+    the start of a line. Keeping the word the group starts in, the spaces or tabs
+    before it and one more character gives both the answer they would have on the
+    whole text.
+    """
+    i = gs
+    while i > 0 and _is_word_char(text[i - 1]):
+        i -= 1
+    while i > 0 and text[i - 1] in (" ", "\t"):
+        i -= 1
+    return i - 1 if i > 0 else 0
+
+
 class Segmenter:
     """Streaming segmenter. `push` returns the sentences that are now final;
     `flush` returns the rest. Batch splitting is `push(text) + flush()`."""
 
+    # Trimming the buffer between pushes is an optimisation only; tests turn it
+    # off to compare against the whole text held at once.
+    _trim = True
+
     def __init__(self, options: Options | None = None) -> None:
         self.opts = options or Options()
         self._buf = ""
+        self._gs = 0  # where the current group starts in _buf; before it is look-behind only
         self._first = True
         self._wrapping = False  # inside a wrapped group: no merging until it ends
 
@@ -304,6 +326,7 @@ class Segmenter:
     def flush(self) -> list[str]:
         out = self._drain(final=True)
         self._buf = ""
+        self._gs = 0
         self._first = True
         self._wrapping = False
         return out
@@ -322,7 +345,7 @@ class Segmenter:
         o = self.opts
         out: list[str] = []
         text = self._buf
-        gs = _skip_ws(text, 0)  # group start
+        gs = _skip_ws(text, self._gs)  # group start
         while True:
             clause = (gs, o.first_clause_min_chars) if (o.eager_first_clause and self._first) else None
             cands = _candidates(text, gs, final, clause)
@@ -363,7 +386,9 @@ class Segmenter:
                 self._emit(out, _strip(text[gs:]))
                 gs = len(text)
             break
-        self._buf = text[gs:]
+        keep = _keep_from(text, gs) if self._trim else 0
+        self._buf = text[keep:]
+        self._gs = gs - keep
         return out
 
 

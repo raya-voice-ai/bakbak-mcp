@@ -307,7 +307,8 @@ export function createHostedApp(options: HostedAppOptions): HostedApp {
     res.on('finish', () => {
       logger.info('request', {
         method: req.method,
-        path: (req.url ?? '/').split('?')[0],
+        // Audio ids are capabilities: keep them out of the logs.
+        path: (req.url ?? '/').split('?')[0]?.replace(/^\/audio\/[^.]+/, '/audio/<id>'),
         status: res.statusCode,
         ms: Math.round(performance.now() - started),
         ip: clientIp(req),

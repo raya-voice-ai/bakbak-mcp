@@ -1,0 +1,77 @@
+{
+  "name": "bakbak-mcp",
+  "version": "1.0.0-rc.1",
+  "description": "Official MCP server for the Bakbak text-to-speech API: generate speech in 13 Indian and English languages from Claude, Cursor, VS Code and other MCP clients.",
+  "mcpName": "io.github.raya-voice-ai/bakbak-mcp",
+  "license": "Apache-2.0",
+  "author": "Raya Voice AI <support@getraya.app>",
+  "homepage": "https://github.com/raya-voice-ai/bakbak-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/raya-voice-ai/bakbak-mcp.git"
+  },
+  "bugs": "https://github.com/raya-voice-ai/bakbak-mcp/issues",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "text-to-speech",
+    "tts",
+    "bakbak",
+    "raya",
+    "hindi",
+    "indic"
+  ],
+  "type": "module",
+  "bin": {
+    "bakbak-mcp": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.map",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "test": "vitest run --project unit",
+    "test:live": "vitest run --project live",
+    "test:watch": "vitest --project unit",
+    "bundle:mcpb": "node scripts/build-mcpb.mjs",
+    "conformance:check": "cd conformance && sha256sum -c MANIFEST.sha256",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "bakbak": "file:../bakbak-js",
+    "ws": "^8.23.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@types/node": "^24.19.2",
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^5.1.1"
+  }
+}

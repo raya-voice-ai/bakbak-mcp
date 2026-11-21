@@ -1,0 +1,8 @@
+dist/
+coverage/
+node_modules/
+mcpb-build/
+conformance/
+CHANGELOG.md
+package-lock.json
+test/__snapshots__/

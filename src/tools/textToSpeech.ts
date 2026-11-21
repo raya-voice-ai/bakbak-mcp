@@ -16,14 +16,28 @@ import { buildFileName } from '../local/files.js';
 import { codePointLength } from '../util.js';
 import { filterVoices } from '../voices.js';
 import type { ToolEnv } from './env.js';
-import { apiError, missingKeyError, rateLimitedError, toolError } from './errors.js';
+import {
+  type ServerMode,
+  apiError,
+  missingKeyError,
+  rateLimitedError,
+  toolError,
+} from './errors.js';
 import { MAX_INLINE_AUDIO_BYTES, type TtsArgs } from './schemas.js';
 
-export const TEXT_TO_SPEECH_DESCRIPTION = [
-  'Convert text to natural speech with Bakbak and save it as an audio file. Uses Bakbak credits for every character, so call it once per text and do not retry a success.',
-  'Pick a voice for the language with list_voices first and pass its id as voice_id and its model as model (a voice works only with its own model).',
-  'Hindi text must be in Devanagari script. Text up to 50,000 characters; long text is split at sentence boundaries and joined into one file.',
-].join(' ');
+/** The tool description; only the sentence about where audio goes differs by mode. */
+export function textToSpeechDescription(mode: ServerMode): string {
+  const result =
+    mode === 'local'
+      ? 'Convert text to natural speech with Bakbak and save it as an audio file on this computer.'
+      : 'Convert text to natural speech with Bakbak and return a download link for the audio (valid for one hour).';
+  return [
+    result,
+    'Uses Bakbak credits for every character, so call it once per text and do not retry a success.',
+    'Pick a voice for the language with list_voices first and pass its id as voice_id and its model as model (a voice works only with its own model).',
+    'Hindi text must be in Devanagari script. Text up to 50,000 characters; long text is split at sentence boundaries and joined into one file.',
+  ].join(' ');
+}
 
 interface ResolvedVoice {
   voiceId: string;

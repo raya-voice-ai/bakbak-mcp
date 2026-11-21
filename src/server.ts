@@ -16,7 +16,7 @@ import {
   localTtsInput,
   localTtsOutput,
 } from './tools/schemas.js';
-import { TEXT_TO_SPEECH_DESCRIPTION, textToSpeech } from './tools/textToSpeech.js';
+import { textToSpeech, textToSpeechDescription } from './tools/textToSpeech.js';
 import { PACKAGE_NAME, VERSION } from './version.js';
 
 export const TOOL_NAMES = ['text_to_speech', 'list_voices'] as const;
@@ -53,7 +53,7 @@ export function createBakbakServer(env: ToolEnv): McpServer {
       'text_to_speech',
       {
         title: TTS_ANNOTATIONS.title,
-        description: TEXT_TO_SPEECH_DESCRIPTION,
+        description: textToSpeechDescription(env.mode),
         inputSchema: localTtsInput,
         outputSchema: localTtsOutput,
         annotations: TTS_ANNOTATIONS,
@@ -65,7 +65,7 @@ export function createBakbakServer(env: ToolEnv): McpServer {
       'text_to_speech',
       {
         title: TTS_ANNOTATIONS.title,
-        description: TEXT_TO_SPEECH_DESCRIPTION,
+        description: textToSpeechDescription(env.mode),
         inputSchema: hostedTtsInput,
         outputSchema: hostedTtsOutput,
         annotations: TTS_ANNOTATIONS,

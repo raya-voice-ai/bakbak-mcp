@@ -133,5 +133,8 @@ Requirements for any proxy in front of the server:
   codes (PKCE still binds a code to its client). Audio is on local disk: either share
   `AUDIO_DIR` between instances (the size cap is then enforced per instance) or route
   `/audio/*` to the instance that created it.
+- **Refresh tokens are not single-use.** Each refresh returns a new refresh token, but with
+  no server state the old one stays valid until it expires (30 days). Ending access is done
+  by deleting the API key or rotating `MCP_TOKEN_SECRET`.
 - **Revoking a user:** deleting their API key in the Bakbak dashboard ends every connection
   that uses it; refresh fails with `invalid_grant` and tool calls report the rejected key.

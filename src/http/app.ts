@@ -246,6 +246,13 @@ export function createHostedApp(options: HostedAppOptions): HostedApp {
     if (isCorsPath(path)) {
       for (const [k, v] of Object.entries(CORS_HEADERS)) res.setHeader(k, v);
       if (method === 'OPTIONS') {
+        // Allow whatever headers the client asks for (2026-07-28 clients send
+        // Mcp-Param-* headers named after tool parameters); credentials are never
+        // cookies here, so this grants nothing a script could not already send.
+        const requested = header(req, 'access-control-request-headers');
+        if (requested && /^[A-Za-z0-9!#$%&'*+.^_`|~, -]{1,2000}$/.test(requested)) {
+          res.setHeader('Access-Control-Allow-Headers', requested);
+        }
         res.writeHead(204);
         res.end();
         return;

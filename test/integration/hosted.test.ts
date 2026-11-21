@@ -460,6 +460,23 @@ describe('API key headers (Claude Code, Cursor, VS Code)', () => {
 });
 
 describe('operations', () => {
+  it('answers CORS preflights for browser-based clients', async () => {
+    const res = await fetch(`${base}/mcp`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://inspector.example',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'authorization, content-type, mcp-method, mcp-param-text',
+      },
+    });
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(res.headers.get('access-control-allow-headers')).toBe(
+      'authorization, content-type, mcp-method, mcp-param-text',
+    );
+    expect(res.headers.get('access-control-expose-headers')).toContain('WWW-Authenticate');
+  });
+
   it('has a health check', async () => {
     const res = await fetch(`${base}/healthz`);
     expect(await res.json()).toMatchObject({ status: 'ok' });

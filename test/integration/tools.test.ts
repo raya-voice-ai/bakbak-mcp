@@ -118,6 +118,7 @@ describe('text_to_speech: short text', () => {
     const wav = await readFile(filePath);
     expect(parseWav(wav)?.dataBytes).toBe(13 * SAMPLES_PER_CHAR * 2);
     const [request] = api.synthesisRequests();
+    expect(request?.headers['x-bakbak-client']).toMatch(/^bakbak-mcp\/\S+ bakbak-js\/\S+$/);
     expect(request?.body).toEqual({
       text,
       voice_id: 'v-hi-std-1',

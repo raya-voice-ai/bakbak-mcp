@@ -23,17 +23,6 @@ docker compose up -d --build
 docker compose logs -f bakbak-mcp
 ```
 
-While `package.json` depends on a local SDK checkout (`"bakbak": "file:../bakbak-js"`), the
-build needs `../bakbak-js` next to this repository; compose passes it as the `bakbak-js` build
-context. Without compose:
-
-```sh
-docker build --build-context bakbak-js=../bakbak-js -t bakbak-mcp .
-```
-
-Once the dependency is the published `bakbak` package, drop `additional_contexts` from
-`compose.yaml` and the `--build-context` flag.
-
 The container listens on 8080 (exposed only to the Docker network), keeps audio in the `audio`
 volume at `/data/audio`, runs with a read-only root file system, no capabilities, and as the
 `node` user.

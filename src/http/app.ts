@@ -33,6 +33,8 @@ export interface HostedAppOptions {
   logger: Logger;
   /** Overrides the client metadata document resolver (tests). */
   documents?: ClientMetadataResolver;
+  /** Interval of SSE keep-alive comments on MCP responses (default 15 s). */
+  keepAliveMs?: number;
 }
 
 export interface HostedApp {
@@ -144,6 +146,7 @@ export function createHostedApp(options: HostedAppOptions): HostedApp {
       // Always stream, so SSE keep-alive comments flow every 15 s during long calls:
       // proxies such as Cloudflare drop a response that is silent for about 100 s.
       responseMode: 'sse',
+      keepAliveMs: options.keepAliveMs ?? 15_000,
       onerror: (error) => {
         logger.warn('mcp request error', { error });
       },

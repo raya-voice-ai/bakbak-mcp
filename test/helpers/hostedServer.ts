@@ -34,7 +34,7 @@ async function freePort(): Promise<number> {
 
 export async function startHosted(
   baseURL: string,
-  options: { env?: Record<string, string>; documents?: DocumentFetcher } = {},
+  options: { env?: Record<string, string>; documents?: DocumentFetcher; keepAliveMs?: number } = {},
 ): Promise<HostedHarness> {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
@@ -52,6 +52,7 @@ export async function startHosted(
     backend: createSdkBackend({ baseURL, logger: silentLogger }),
     logger: silentLogger,
     ...(options.documents && { documents: new ClientMetadataResolver(options.documents) }),
+    ...(options.keepAliveMs !== undefined && { keepAliveMs: options.keepAliveMs }),
   });
   await app.listen();
   return { app, url, config, close: () => app.close(100) };

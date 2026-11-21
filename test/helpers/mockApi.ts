@@ -112,6 +112,8 @@ export interface MockApi {
   /** Synthesis requests only (HTTP and WebSocket). */
   synthesisRequests(): RecordedRequest[];
   intercept: Interceptor | undefined;
+  /** Delay before answering each synthesis request, in milliseconds. */
+  delayMs: number;
   close(): Promise<void>;
 }
 
@@ -142,6 +144,7 @@ export async function startMockApi(): Promise<MockApi> {
     requests,
     synthesisRequests: () => requests.filter((r) => r.path.startsWith('/v1/text-to-speech')),
     intercept: undefined,
+    delayMs: 0,
     close: async () => {
       wss.clients.forEach((c) => {
         c.terminate();
@@ -160,83 +163,88 @@ export async function startMockApi(): Promise<MockApi> {
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => chunks.push(c));
     req.on('end', () => {
-      const path = (req.url ?? '/').split('?')[0] ?? '/';
-      const raw = Buffer.concat(chunks).toString('utf8');
-      let body: Record<string, unknown> | undefined;
-      try {
-        body = raw ? (JSON.parse(raw) as Record<string, unknown>) : undefined;
-      } catch {
-        body = undefined;
-      }
-      const recorded: RecordedRequest = {
-        method: req.method ?? 'GET',
-        path,
-        headers: req.headers,
-        body,
-        transport: 'http',
-      };
-      requests.push(recorded);
-      if (req.headers['x-api-key'] !== TEST_KEY) {
-        sendJson(res, 401, { message: 'Invalid authentication credentials', request_id: 'gw-1' });
-        return;
-      }
-      const override = api.intercept?.(recorded);
-      if (override) {
-        sendJson(res, override.status, override.json, {
-          'X-Request-Id': 'req_err',
-          ...override.headers,
-        });
-        return;
-      }
-      if (req.method === 'GET' && path === '/v1/voices') {
-        sendJson(
-          res,
-          200,
-          { voices: VOICES, count: VOICES.length },
-          { 'X-Request-Id': 'req_voices' },
-        );
-        return;
-      }
-      if (req.method === 'POST' && path === '/v1/text-to-speech' && body) {
-        const n = ++seq;
-        const text = str(body.text);
-        const format = (body.output_format ?? {
-          container: 'wav',
-          encoding: 'pcm_s16le',
-        }) as OutputFormat;
-        const rate = format.sample_rate ?? 24000;
-        const headers: Record<string, string> = { 'X-Request-Id': `req_${n}` };
-        if (format.container === 'mp3') {
-          send(res, 200, mp3For(codePoints(text)), {
-            ...headers,
-            'Content-Type': 'audio/mpeg',
-            'X-Audio-Format': 'mp3',
+      void (async () => {
+        const path = (req.url ?? '/').split('?')[0] ?? '/';
+        const raw = Buffer.concat(chunks).toString('utf8');
+        let body: Record<string, unknown> | undefined;
+        try {
+          body = raw ? (JSON.parse(raw) as Record<string, unknown>) : undefined;
+        } catch {
+          body = undefined;
+        }
+        const recorded: RecordedRequest = {
+          method: req.method ?? 'GET',
+          path,
+          headers: req.headers,
+          body,
+          transport: 'http',
+        };
+        requests.push(recorded);
+        if (req.headers['x-api-key'] !== TEST_KEY) {
+          sendJson(res, 401, { message: 'Invalid authentication credentials', request_id: 'gw-1' });
+          return;
+        }
+        const override = api.intercept?.(recorded);
+        if (override) {
+          sendJson(res, override.status, override.json, {
+            'X-Request-Id': 'req_err',
+            ...override.headers,
           });
           return;
         }
-        const encoding = format.encoding ?? 'pcm_s16le';
-        const pcm = pcmFor(codePoints(text), n, encoding);
-        const audioHeaders = {
-          'X-Audio-Format': encoding,
-          'X-Audio-Sample-Rate': String(rate),
-          'X-Audio-Channels': '1',
-        };
-        if (format.container === 'raw') {
-          send(res, 200, pcm, {
+        if (req.method === 'GET' && path === '/v1/voices') {
+          sendJson(
+            res,
+            200,
+            { voices: VOICES, count: VOICES.length },
+            { 'X-Request-Id': 'req_voices' },
+          );
+          return;
+        }
+        if (req.method === 'POST' && path === '/v1/text-to-speech' && body) {
+          if (api.delayMs > 0) await new Promise((r) => setTimeout(r, api.delayMs));
+          const n = ++seq;
+          const text = str(body.text);
+          const format = (body.output_format ?? {
+            container: 'wav',
+            encoding: 'pcm_s16le',
+          }) as OutputFormat;
+          const rate = format.sample_rate ?? 24000;
+          const headers: Record<string, string> = { 'X-Request-Id': `req_${n}` };
+          if (format.container === 'mp3') {
+            send(res, 200, mp3For(codePoints(text)), {
+              ...headers,
+              'Content-Type': 'audio/mpeg',
+              'X-Audio-Format': 'mp3',
+            });
+            return;
+          }
+          const encoding = format.encoding ?? 'pcm_s16le';
+          const pcm = pcmFor(codePoints(text), n, encoding);
+          const audioHeaders = {
+            'X-Audio-Format': encoding,
+            'X-Audio-Sample-Rate': String(rate),
+            'X-Audio-Channels': '1',
+          };
+          if (format.container === 'raw') {
+            send(res, 200, pcm, {
+              ...headers,
+              ...audioHeaders,
+              'Content-Type': encoding === 'pcm_mulaw' ? 'audio/basic' : 'audio/pcm',
+            });
+            return;
+          }
+          send(res, 200, Buffer.concat([wavHeader(pcm.byteLength, rate, encoding), pcm]), {
             ...headers,
             ...audioHeaders,
-            'Content-Type': encoding === 'pcm_mulaw' ? 'audio/basic' : 'audio/pcm',
+            'Content-Type': 'audio/wav',
           });
           return;
         }
-        send(res, 200, Buffer.concat([wavHeader(pcm.byteLength, rate, encoding), pcm]), {
-          ...headers,
-          ...audioHeaders,
-          'Content-Type': 'audio/wav',
-        });
-        return;
-      }
-      sendJson(res, 404, { message: 'no Route matched with those values', request_id: 'gw-404' });
+        sendJson(res, 404, { message: 'no Route matched with those values', request_id: 'gw-404' });
+      })().catch(() => {
+        res.destroy();
+      });
     });
   });
 

@@ -7,7 +7,7 @@
 import { createSdkBackend } from './backend/sdk.js';
 import { ConfigError, loadHostedConfig } from './http/config.js';
 import { SecretConfigError } from './http/sealer.js';
-import { runStdio } from './local/stdio.js';
+import { envValue, runStdio } from './local/stdio.js';
 import { createLogger, parseLogLevel } from './log.js';
 import { PACKAGE_NAME, VERSION } from './version.js';
 
@@ -71,7 +71,7 @@ function main(argv: readonly string[]): void {
   };
 
   if (!argv.includes('--http')) {
-    const backend = createSdkBackend({ baseURL: process.env.BAKBAK_BASE_URL, logger });
+    const backend = createSdkBackend({ baseURL: envValue(process.env.BAKBAK_BASE_URL), logger });
     const running = runStdio({ backend, logger });
     shutdownOn(() => running.close());
     return;

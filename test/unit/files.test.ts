@@ -147,3 +147,14 @@ describe('output_path', () => {
     expect(await readFile(victim, 'utf8')).toBe('keep');
   });
 });
+
+describe('environment values', () => {
+  it('treats empty values and unexpanded host placeholders as unset', async () => {
+    const { envValue } = await import('../../src/local/stdio.js');
+    expect(envValue(undefined)).toBeUndefined();
+    expect(envValue('  ')).toBeUndefined();
+    expect(envValue('${user_config.output_dir}')).toBeUndefined();
+    expect(envValue(' /tmp/x ')).toBe('/tmp/x');
+    expect(envValue('key-with-${dollar}')).toBe('key-with-${dollar}');
+  });
+});

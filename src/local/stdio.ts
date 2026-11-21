@@ -9,6 +9,16 @@ import { VoiceCache } from '../voices.js';
 import { createLocalDelivery } from './delivery.js';
 import { resolveOutputDir } from './files.js';
 
+/**
+ * An environment value, or undefined when empty. A host that leaves an optional
+ * setting unset may pass its placeholder through verbatim (`${user_config.x}`);
+ * that counts as unset too.
+ */
+export function envValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && !/^\$\{[^}]*\}$/.test(trimmed) ? trimmed : undefined;
+}
+
 export interface StdioOptions {
   backend: Backend;
   logger: Logger;
@@ -23,8 +33,8 @@ export interface RunningStdio {
 export function runStdio(options: StdioOptions): RunningStdio {
   const env = options.env ?? process.env;
   const { backend, logger } = options;
-  const apiKey = env.BAKBAK_API_KEY?.trim() || undefined;
-  const outputDir = resolveOutputDir(env.BAKBAK_MCP_OUTPUT_DIR);
+  const apiKey = envValue(env.BAKBAK_API_KEY);
+  const outputDir = resolveOutputDir(envValue(env.BAKBAK_MCP_OUTPUT_DIR));
   const voices = new VoiceCache();
   const delivery = createLocalDelivery(outputDir);
 

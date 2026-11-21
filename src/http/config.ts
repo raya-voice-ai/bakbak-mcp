@@ -21,6 +21,14 @@ export interface HostedConfig {
   audioDir: string;
   audioTtlMs: number;
   audioMaxBytes: number;
+  /** Storage quota per API key. */
+  audioMaxBytesPerKey: number;
+  /** Most audio one text_to_speech call may produce (estimated before synthesis). */
+  maxOutputBytes: number;
+  /** Most text_to_speech calls running at once per API key. */
+  ttsConcurrencyPerKey: number;
+  /** Most estimated audio bytes being produced at once, across all calls. */
+  inflightAudioBytes: number;
   port: number;
   host: string;
   trustedProxies: BlockList;
@@ -90,6 +98,22 @@ export function loadHostedConfig(env: NodeJS.ProcessEnv = process.env): HostedCo
   } catch (error) {
     throw new ConfigError(`TRUSTED_PROXIES: ${(error as Error).message}`);
   }
+  const audioMaxBytes = env.AUDIO_MAX_BYTES
+    ? parseSize(env.AUDIO_MAX_BYTES, 'AUDIO_MAX_BYTES')
+    : 2 * 1024 ** 3;
+  const concurrency = Number(env.TTS_CONCURRENCY_PER_KEY ?? 2);
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new ConfigError('TTS_CONCURRENCY_PER_KEY must be a whole number, 1 or more.');
+  }
+  const maxOutputBytes = env.MAX_OUTPUT_BYTES
+    ? parseSize(env.MAX_OUTPUT_BYTES, 'MAX_OUTPUT_BYTES')
+    : 512 * 1024 ** 2;
+  const inflightAudioBytes = env.INFLIGHT_AUDIO_BYTES
+    ? parseSize(env.INFLIGHT_AUDIO_BYTES, 'INFLIGHT_AUDIO_BYTES')
+    : 1024 ** 3;
+  if (inflightAudioBytes < maxOutputBytes) {
+    throw new ConfigError('INFLIGHT_AUDIO_BYTES must be at least MAX_OUTPUT_BYTES.');
+  }
   return {
     publicUrl,
     resourceUrl: `${publicUrl}/mcp`,
@@ -97,9 +121,13 @@ export function loadHostedConfig(env: NodeJS.ProcessEnv = process.env): HostedCo
     baseURL: env.BAKBAK_BASE_URL?.trim() || undefined,
     audioDir: path.resolve(env.AUDIO_DIR?.trim() || path.join(tmpdir(), 'bakbak-mcp-audio')),
     audioTtlMs: env.AUDIO_TTL ? parseDuration(env.AUDIO_TTL, 'AUDIO_TTL') : 3_600_000,
-    audioMaxBytes: env.AUDIO_MAX_BYTES
-      ? parseSize(env.AUDIO_MAX_BYTES, 'AUDIO_MAX_BYTES')
-      : 2 * 1024 ** 3,
+    audioMaxBytes,
+    audioMaxBytesPerKey: env.AUDIO_MAX_BYTES_PER_KEY
+      ? parseSize(env.AUDIO_MAX_BYTES_PER_KEY, 'AUDIO_MAX_BYTES_PER_KEY')
+      : Math.floor(audioMaxBytes / 4),
+    maxOutputBytes,
+    ttsConcurrencyPerKey: concurrency,
+    inflightAudioBytes,
     port,
     host: env.HOST?.trim() || '0.0.0.0',
     trustedProxies,

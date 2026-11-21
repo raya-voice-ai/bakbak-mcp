@@ -15,17 +15,18 @@ import type { Logger } from '../log.js';
 import { createBakbakServer } from '../server.js';
 import { fingerprint } from '../util.js';
 import { VERSION } from '../version.js';
+import { Admission } from '../tools/admission.js';
 import { VoiceCache } from '../voices.js';
 import { AudioStore } from './audioStore.js';
 import type { HostedConfig } from './config.js';
 import { KeyChecker, readCredential } from './credentials.js';
 import { createHostedDelivery } from './delivery.js';
 import { header, sendJson, sendText } from './io.js';
-import { clientAddress } from './ip.js';
+import { clientAddress, rateLimitKey } from './ip.js';
 import { ClientMetadataResolver } from './oauth/cimd.js';
 import { OAuthServer } from './oauth/server.js';
 import { TokenIssuer } from './oauth/tokens.js';
-import { RateLimiter } from './rateLimit.js';
+import { RateLimiter, type RateLimitOptions } from './rateLimit.js';
 
 export interface HostedAppOptions {
   config: HostedConfig;
@@ -35,7 +36,21 @@ export interface HostedAppOptions {
   documents?: ClientMetadataResolver;
   /** Interval of SSE keep-alive comments on MCP responses (default 15 s). */
   keepAliveMs?: number;
+  /** Overrides of the per-address and per-key rate limits (tests). */
+  limits?: Partial<Record<LimitName, RateLimitOptions>>;
 }
+
+type LimitName = 'register' | 'authorizePost' | 'authorizeGet' | 'toolCalls' | 'keyChecks';
+
+/** Production rate limits; see deploy/README.md. */
+const LIMITS: Record<LimitName, RateLimitOptions> = {
+  register: { burst: 20, perMinute: 20 },
+  authorizePost: { burst: 10, perMinute: 10 },
+  authorizeGet: { burst: 30, perMinute: 30 },
+  toolCalls: { burst: 30, perMinute: 60 },
+  // Uncached API-key checks at /mcp, per address: wrong keys cannot drive traffic.
+  keyChecks: { burst: 10, perMinute: 20 },
+};
 
 export interface HostedApp {
   server: Server;
@@ -98,6 +113,7 @@ export function createHostedApp(options: HostedAppOptions): HostedApp {
     directory: config.audioDir,
     ttlMs: config.audioTtlMs,
     maxBytes: config.audioMaxBytes,
+    maxBytesPerOwner: config.audioMaxBytesPerKey,
     publicUrl: config.publicUrl,
     logger,
   });
@@ -110,6 +126,10 @@ export function createHostedApp(options: HostedAppOptions): HostedApp {
       },
       config.trustedProxies,
     );
+  /** Per-address limits count IPv6 clients by /64. */
+  const limitKey = (req: IncomingMessage): string => rateLimitKey(clientIp(req));
+  const limiter = (name: LimitName): RateLimiter =>
+    new RateLimiter(options.limits?.[name] ?? LIMITS[name]);
   const oauth = new OAuthServer({
     publicUrl: config.publicUrl,
     resourceUrl: config.resourceUrl,
@@ -118,14 +138,20 @@ export function createHostedApp(options: HostedAppOptions): HostedApp {
     documents: options.documents ?? new ClientMetadataResolver(),
     checkKey: (apiKey) => keys.check(apiKey),
     limits: {
-      register: new RateLimiter({ burst: 20, perMinute: 20 }),
-      authorizePost: new RateLimiter({ burst: 10, perMinute: 10 }),
-      authorizeGet: new RateLimiter({ burst: 30, perMinute: 30 }),
+      register: limiter('register'),
+      authorizePost: limiter('authorizePost'),
+      authorizeGet: limiter('authorizeGet'),
     },
-    clientIp,
+    clientIp: limitKey,
     logger,
   });
-  const toolLimiter = new RateLimiter({ burst: 30, perMinute: 60 });
+  const toolLimiter = limiter('toolCalls');
+  const keyCheckLimiter = limiter('keyChecks');
+  const admission = new Admission({
+    maxOutputBytes: Math.min(config.maxOutputBytes, config.audioMaxBytesPerKey),
+    perKeyConcurrency: config.ttsConcurrencyPerKey,
+    inflightBytes: config.inflightAudioBytes,
+  });
   const delivery = createHostedDelivery(audioStore);
 
   const mcp = createMcpHandler(
@@ -139,6 +165,7 @@ export function createHostedApp(options: HostedAppOptions): HostedApp {
         delivery,
         logger: logger.child({ key: typeof apiKey === 'string' ? fingerprint(apiKey) : undefined }),
         rateLimit: (key) => toolLimiter.take(fingerprint(key)),
+        admission,
       });
     },
     {
@@ -176,14 +203,47 @@ export function createHostedApp(options: HostedAppOptions): HostedApp {
       );
       return;
     }
-    if (credential.via !== 'oauth' && (await keys.check(credential.apiKey)) === 'invalid') {
-      sendJson(
-        res,
-        401,
-        { error: 'invalid_token', error_description: 'Bakbak did not accept this API key.' },
-        { 'WWW-Authenticate': oauth.challenge('invalid_token') },
-      );
-      return;
+    if (credential.via !== 'oauth') {
+      // A raw key is checked before it is used, so only valid keys reach the backend.
+      let verdict = keys.cached(credential.apiKey);
+      if (verdict === undefined) {
+        const wait = keyCheckLimiter.take(limitKey(req));
+        if (wait !== undefined) {
+          sendJson(
+            res,
+            429,
+            {
+              error: 'too_many_requests',
+              error_description: `Too many API keys checked from this address. Retry in ${wait} s.`,
+            },
+            { 'Retry-After': String(wait) },
+          );
+          return;
+        }
+        verdict = await keys.check(credential.apiKey);
+      }
+      if (verdict === 'invalid') {
+        sendJson(
+          res,
+          401,
+          { error: 'invalid_token', error_description: 'Bakbak did not accept this API key.' },
+          { 'WWW-Authenticate': oauth.challenge('invalid_token') },
+        );
+        return;
+      }
+      if (verdict === 'unavailable') {
+        sendJson(
+          res,
+          503,
+          {
+            error: 'temporarily_unavailable',
+            error_description:
+              'Bakbak could not be reached to check the API key. Try again shortly.',
+          },
+          { 'Retry-After': '5' },
+        );
+        return;
+      }
     }
     const auth: AuthInfo = {
       token: fingerprint(credential.apiKey),

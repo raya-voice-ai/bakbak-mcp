@@ -3,9 +3,8 @@
  * and validation of a caller-chosen `output_path`.
  */
 
-import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { rename, rm, stat, writeFile } from 'node:fs/promises';
+import { constants, existsSync } from 'node:fs';
+import { copyFile, link, lstat, rename, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -78,6 +77,26 @@ export interface OutputPathRequest {
   outputPath: string;
   /** Extensions (without the dot) the file may have. */
   extensions: readonly string[];
+  /** The platform whose path rules apply (default: this one). */
+  platform?: NodeJS.Platform;
+}
+
+const WINDOWS_DEVICE_NAMES = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³]|conin\$|conout\$)$/i;
+
+/**
+ * Windows paths that do not name an ordinary local file: network shares
+ * (`\\server\share`), device namespaces (`\\?\`, `\\.\`), drive-relative
+ * paths (`C:file`) and reserved device names (`NUL`, `COM1.wav`, …).
+ */
+export function windowsPathProblem(raw: string): string | undefined {
+  if (/^[\\/]{2}/.test(raw)) return 'output_path cannot be a network (UNC) or device path.';
+  if (/^[a-z]:(?![\\/])/i.test(raw))
+    return 'output_path must be a full path such as C:\\Users\\you\\speech.wav.';
+  const name = raw.split(/[\\/]/).at(-1) ?? '';
+  const stem = name.split('.')[0]?.trimEnd() ?? '';
+  if (WINDOWS_DEVICE_NAMES.test(stem))
+    return `output_path cannot use the reserved Windows name "${stem}".`;
+  return undefined;
 }
 
 /**
@@ -89,6 +108,10 @@ export async function resolveOutputPath(request: OutputPathRequest): Promise<str
   const raw = request.outputPath.trim();
   if (raw === '' || raw.includes('\0')) {
     throw new OutputPathError('output_path must be a file path.');
+  }
+  if ((request.platform ?? process.platform) === 'win32') {
+    const problem = windowsPathProblem(raw);
+    if (problem) throw new OutputPathError(problem);
   }
   const base = path.resolve(request.outputDir);
   const resolved = path.resolve(base, raw);
@@ -117,43 +140,40 @@ export async function resolveOutputPath(request: OutputPathRequest): Promise<str
   return resolved;
 }
 
+const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'EMLINK', 'ENOSYS']);
+
+function existsError(target: string): OutputPathError {
+  return new OutputPathError(
+    `${target} already exists. Set overwrite to true to replace it, or choose another path.`,
+  );
+}
+
 /**
- * Writes `data` to `filePath`. Without `overwrite` an existing file (or
- * symlink) is never replaced. With it, the new file is written beside the
- * target and renamed over it, so a reader never sees half a file and a
- * symlink at the target is replaced rather than followed.
+ * Moves a finished temporary file to `target`. Without `overwrite` an existing
+ * file (or symlink) is never replaced: the file is hard-linked into place,
+ * which fails atomically if the target exists (or, where the file system has
+ * no hard links, copied with the same guarantee). With `overwrite` it is
+ * renamed over the target, so a symlink there is replaced, not followed.
  */
-export async function writeAudioFile(
-  filePath: string,
-  data: Uint8Array,
-  overwrite: boolean,
-): Promise<void> {
-  if (!overwrite) {
-    try {
-      await writeFile(filePath, data, { flag: 'wx' });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-        throw new OutputPathError(
-          `${filePath} already exists. Set overwrite to true to replace it, or choose another path.`,
-        );
-      }
-      throw error;
-    }
+export async function placeFile(temp: string, target: string, overwrite: boolean): Promise<void> {
+  if (overwrite) {
+    const existing = await lstat(target).catch(() => undefined);
+    if (existing?.isDirectory()) throw new OutputPathError(`${target} is a directory.`);
+    await rename(temp, target);
     return;
   }
-  const existing = await stat(filePath).catch(() => undefined);
-  if (existing?.isDirectory()) {
-    throw new OutputPathError(`${filePath} is a directory.`);
-  }
-  const temp = path.join(
-    path.dirname(filePath),
-    `.${path.basename(filePath)}.${randomBytes(6).toString('hex')}.tmp`,
-  );
   try {
-    await writeFile(temp, data, { flag: 'wx' });
-    await rename(temp, filePath);
+    await link(temp, target);
   } catch (error) {
-    await rm(temp, { force: true });
-    throw error;
+    const code = (error as NodeJS.ErrnoException).code ?? '';
+    if (code === 'EEXIST') throw existsError(target);
+    if (!NO_HARD_LINKS.has(code)) throw error;
+    try {
+      await copyFile(temp, target, constants.COPYFILE_EXCL);
+    } catch (copyError) {
+      if ((copyError as NodeJS.ErrnoException).code === 'EEXIST') throw existsError(target);
+      throw copyError;
+    }
   }
+  await rm(temp, { force: true });
 }

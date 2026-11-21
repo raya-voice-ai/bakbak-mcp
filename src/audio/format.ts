@@ -110,6 +110,48 @@ export function parseWav(bytes: Uint8Array): WavInfo | undefined {
   return undefined;
 }
 
+/**
+ * A copy of a WAV header (as `toWav` writes for empty audio) with its sizes
+ * set for `dataBytes` of audio: the RIFF size, the `fact` sample count when
+ * present, and the `data` size. The header must end with the `data` chunk's
+ * header, so the audio follows it directly.
+ */
+export function patchWavHeader(header: Uint8Array, dataBytes: number): Uint8Array {
+  const out = new Uint8Array(header);
+  const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
+  if (out.byteLength < 12 || ascii(out, 0, 4) !== 'RIFF') throw new Error('not a WAV header');
+  view.setUint32(4, out.byteLength - 8 + dataBytes, true);
+  let blockAlign = 1;
+  let offset = 12;
+  while (offset + 8 <= out.byteLength) {
+    const id = ascii(out, offset, 4);
+    const size = view.getUint32(offset + 4, true);
+    if (id === 'fmt ') blockAlign = view.getUint16(offset + 8 + 12, true) || 1;
+    else if (id === 'fact') view.setUint32(offset + 8, Math.floor(dataBytes / blockAlign), true);
+    else if (id === 'data') {
+      view.setUint32(offset + 4, dataBytes, true);
+      return out;
+    }
+    offset += 8 + size + (size % 2);
+  }
+  throw new Error('WAV header without a data chunk');
+}
+
+/** Generous seconds of speech per character, for estimating output size before synthesis. */
+export const ESTIMATED_SECONDS_PER_CHAR = 0.15;
+/** Assumed MP3 rate for estimates: 320 kbit/s, the most an MP3 uses. */
+const MP3_BYTES_PER_SECOND = 40_000;
+
+/** An upper estimate of the bytes `characters` of text become in this format. */
+export function estimateOutputBytes(characters: number, format: OutputFormat): number {
+  const seconds = characters * ESTIMATED_SECONDS_PER_CHAR;
+  const perSecond =
+    format.container === 'mp3'
+      ? MP3_BYTES_PER_SECOND
+      : (bytesPerSample(format.encoding) ?? 4) * (format.sample_rate ?? DEFAULT_SAMPLE_RATE);
+  return Math.ceil(seconds * perSecond) + 1024;
+}
+
 /** Length of an ID3v2 tag at the start of `bytes`, or 0. */
 export function id3v2Length(bytes: Uint8Array): number {
   if (bytes.byteLength < 10 || ascii(bytes, 0, 3) !== 'ID3') return 0;

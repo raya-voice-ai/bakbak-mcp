@@ -11,7 +11,7 @@ export { defaultOutputDir, resolveOutputDir } from './local/files.js';
 export { runStdio, type StdioOptions, type RunningStdio } from './local/stdio.js';
 export { createHostedApp, type HostedApp, type HostedAppOptions } from './http/app.js';
 export { loadHostedConfig, type HostedConfig } from './http/config.js';
-export type { Delivery, DeliveryRequest, DeliveryTarget, Delivered } from './delivery.js';
+export type { Committed, Delivered, Delivery, DeliveryRequest, PendingAudio } from './delivery.js';
 export type { ToolEnv } from './tools/env.js';
 export type { ServerMode } from './tools/errors.js';
 export { VoiceCache } from './voices.js';

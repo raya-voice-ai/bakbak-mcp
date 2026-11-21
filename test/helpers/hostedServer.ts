@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { createSdkBackend } from '../../src/backend/sdk.js';
-import { type HostedApp, createHostedApp } from '../../src/http/app.js';
+import { type HostedApp, type HostedAppOptions, createHostedApp } from '../../src/http/app.js';
 import { loadHostedConfig } from '../../src/http/config.js';
 import { ClientMetadataResolver, type DocumentFetcher } from '../../src/http/oauth/cimd.js';
 import { silentLogger } from '../../src/log.js';
@@ -34,7 +34,14 @@ async function freePort(): Promise<number> {
 
 export async function startHosted(
   baseURL: string,
-  options: { env?: Record<string, string>; documents?: DocumentFetcher; keepAliveMs?: number } = {},
+  options: {
+    env?: Record<string, string>;
+    documents?: DocumentFetcher;
+    keepAliveMs?: number;
+    /** Bound on the backend's per-key clients. */
+    maxClients?: number;
+    limits?: HostedAppOptions['limits'];
+  } = {},
 ): Promise<HostedHarness> {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
@@ -49,10 +56,15 @@ export async function startHosted(
   });
   const app = createHostedApp({
     config,
-    backend: createSdkBackend({ baseURL, logger: silentLogger }),
+    backend: createSdkBackend({
+      baseURL,
+      logger: silentLogger,
+      ...(options.maxClients !== undefined && { maxClients: options.maxClients }),
+    }),
     logger: silentLogger,
     ...(options.documents && { documents: new ClientMetadataResolver(options.documents) }),
     ...(options.keepAliveMs !== undefined && { keepAliveMs: options.keepAliveMs }),
+    ...(options.limits && { limits: options.limits }),
   });
   await app.listen();
   return { app, url, config, close: () => app.close(100) };

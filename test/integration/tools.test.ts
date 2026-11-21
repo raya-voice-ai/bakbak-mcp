@@ -53,9 +53,10 @@ describe('discovery', () => {
     const { tools } = await h.client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(['list_voices', 'text_to_speech']);
     const tts = tools.find((t) => t.name === 'text_to_speech')!;
+    // Local mode can replace files (overwrite), so it is marked destructive.
     expect(tts.annotations).toMatchObject({
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: true,
     });
@@ -520,6 +521,64 @@ describe('cancellation', () => {
     await new Promise((r) => setTimeout(r, 1200));
     // The context was cancelled on the WebSocket, and no file was written.
     expect(api.synthesisRequests().some((r) => r.body?.cancel === true)).toBe(true);
+    expect(await readdir(h.outputDir)).toEqual([]);
+  });
+});
+
+describe('review regressions', () => {
+  it('requires an encoding for raw and wav before calling the API', async () => {
+    for (const container of ['raw', 'wav']) {
+      const result = await call('text_to_speech', {
+        text: 'नमस्ते',
+        language: 'hi',
+        output_format: { container },
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/output_format\.encoding is required for wav and raw/);
+    }
+    expect(api.synthesisRequests()).toHaveLength(0);
+  });
+
+  it('refuses to join WAV pieces labelled mp3, but keeps a single piece as the API sent it', async () => {
+    api.mp3AsWav = true;
+    try {
+      const long = await call('text_to_speech', {
+        text: Array.from({ length: 240 }, () => SENTENCE).join(' '),
+        language: 'hi',
+        output_format: { container: 'mp3' },
+      });
+      expect(long.isError).toBe(true);
+      expect(textOf(long)).toMatch(
+        /MP3 is not available for long text.*Use the default WAV output/s,
+      );
+      expect(await readdir(h.outputDir)).toEqual([]);
+      const short = structured(
+        await call('text_to_speech', {
+          text: 'नमस्ते',
+          language: 'hi',
+          output_format: { container: 'mp3' },
+        }),
+      );
+      expect(short.file_path).toMatch(/\.mp3$/);
+    } finally {
+      api.mp3AsWav = false;
+    }
+  });
+
+  it('says the server is restarting when a call is stopped by shutdown', async () => {
+    api.delayMs = 300;
+    const pending = call('text_to_speech', {
+      text: Array.from({ length: 240 }, () => SENTENCE).join(' '),
+      language: 'hi',
+    });
+    for (let i = 0; i < 200 && !api.synthesisRequests().some((r) => r.transport === 'ws'); i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    await h.backend.close();
+    const result = await pending;
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/shutting down.*restarting/s);
+    expect(textOf(result)).not.toMatch(/Could not reach/);
     expect(await readdir(h.outputDir)).toEqual([]);
   });
 });

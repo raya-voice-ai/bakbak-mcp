@@ -17,7 +17,7 @@ import { createBakbakServer } from '../../src/server.js';
 import type { ServerMode } from '../../src/tools/errors.js';
 import { VoiceCache } from '../../src/voices.js';
 
-const unusedDelivery: Delivery = { prepare: () => Promise.reject(new Error('unused')) };
+const unusedDelivery: Delivery = { begin: () => Promise.reject(new Error('unused')) };
 
 async function listTools(mode: ServerMode) {
   const backend = createSdkBackend({ baseURL: 'http://127.0.0.1:9', logger: silentLogger });

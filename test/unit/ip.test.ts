@@ -6,6 +6,7 @@ import {
   isPublicAddress,
   normalizeIp,
   parseTrustedProxies,
+  rateLimitKey,
 } from '../../src/http/ip.js';
 
 const trusted = parseTrustedProxies(undefined);
@@ -99,5 +100,17 @@ describe('public addresses', () => {
     expect(normalizeIp('[::1]')).toBe('::1');
     expect(normalizeIp('fe80::1%eth0')).toBe('fe80::1');
     expect(normalizeIp('::ffff:10.0.0.1')).toBe('10.0.0.1');
+  });
+});
+
+describe('rate-limit keys', () => {
+  it('counts IPv4 by address and IPv6 by /64', () => {
+    expect(rateLimitKey('198.51.100.7')).toBe('198.51.100.7');
+    expect(rateLimitKey('::ffff:198.51.100.7')).toBe('198.51.100.7');
+    expect(rateLimitKey('2001:db8:1:2:aaaa::1')).toBe('2001:db8:1:2::/64');
+    expect(rateLimitKey('2001:db8:1:2:ffff:ffff:ffff:fffe')).toBe('2001:db8:1:2::/64');
+    expect(rateLimitKey('2001:db8::1')).toBe('2001:db8:0:0::/64');
+    expect(rateLimitKey('::1')).toBe('0:0:0:0::/64');
+    expect(rateLimitKey('64:ff9b::192.0.2.1')).toBe('64:ff9b:0:0::/64');
   });
 });

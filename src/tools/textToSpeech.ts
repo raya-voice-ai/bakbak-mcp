@@ -1,19 +1,21 @@
+import { readFile } from 'node:fs/promises';
+
 import type { CallToolResult, ServerContext } from '@modelcontextprotocol/server';
 
 import {
   DEFAULT_OUTPUT_FORMAT,
   DEFAULT_SAMPLE_RATE,
   acceptedExtensions,
-  audioDuration,
+  estimateOutputBytes,
   extensionFor,
   mimeTypeFor,
   roundSeconds,
 } from '../audio/format.js';
-import { SynthesisInputError, synthesize } from '../audio/synthesize.js';
+import { Mp3UnavailableError, SynthesisInputError, synthesize } from '../audio/synthesize.js';
 import type { OutputFormat, TtsClient, Voice } from '../backend/types.js';
 import { type Delivered, DeliveryError } from '../delivery.js';
 import { buildFileName } from '../local/files.js';
-import { codePointLength } from '../util.js';
+import { codePointLength, fingerprint } from '../util.js';
 import { filterVoices } from '../voices.js';
 import type { ToolEnv } from './env.js';
 import {
@@ -134,9 +136,32 @@ export async function textToSpeech(
   const wait = env.rateLimit?.(apiKey);
   if (wait !== undefined) return rateLimitedError(wait);
 
-  const started = performance.now();
   const characters = codePointLength(args.text);
   const format: OutputFormat = args.output_format ?? { ...DEFAULT_OUTPUT_FORMAT };
+  const owner = fingerprint(apiKey);
+  const ticket = env.admission?.admit(owner, estimateOutputBytes(characters, format));
+  if (ticket && 'refused' in ticket) return toolError(ticket.refused);
+  try {
+    return await run(args, env, ctx, { apiKey, owner, characters, format });
+  } finally {
+    ticket?.release();
+  }
+}
+
+interface CallFacts {
+  apiKey: string;
+  owner: string;
+  characters: number;
+  format: OutputFormat;
+}
+
+async function run(
+  args: TtsArgs,
+  env: ToolEnv,
+  ctx: ServerContext,
+  { apiKey, owner, characters, format }: CallFacts,
+): Promise<CallToolResult> {
+  const started = performance.now();
   const client = env.backend.client(apiKey);
   const signal = ctx.mcpReq.signal;
   const log = env.logger.child({ tool: 'text_to_speech', characters });
@@ -147,7 +172,7 @@ export async function textToSpeech(
     if ('content' in voice) return voice;
 
     const extension = extensionFor(format);
-    const target = await env.delivery.prepare({
+    const pending = await env.delivery.begin({
       format,
       extension,
       acceptedExtensions: acceptedExtensions(format),
@@ -160,25 +185,36 @@ export async function textToSpeech(
       }),
       outputPath: args.output_path,
       overwrite: args.overwrite ?? false,
+      owner,
     });
 
-    const result = await synthesize(
-      env.backend,
-      client,
-      {
-        text: args.text,
-        voice_id: voice.voiceId,
-        language: args.language,
-        model: voice.model,
-        speed: args.speed,
-        output_format: format,
-      },
-      { signal, onPieceDone: progressReporter(ctx) },
-    );
-    requestIds = result.requestIds;
-    const delivered = await target.commit(result.data);
+    let result;
+    let committed;
+    try {
+      result = await synthesize(
+        env.backend,
+        client,
+        {
+          text: args.text,
+          voice_id: voice.voiceId,
+          language: args.language,
+          model: voice.model,
+          speed: args.speed,
+          output_format: format,
+        },
+        pending,
+        { signal, onPieceDone: progressReporter(ctx) },
+      );
+      requestIds = result.requestIds;
+      committed = await pending.commit();
+    } catch (error) {
+      await pending.discard();
+      throw error;
+    }
+    const { delivered } = committed;
+    const bytes = pending.bytesWritten;
 
-    const seconds = roundSeconds(audioDuration(result.data, format));
+    const seconds = roundSeconds(result.durationSeconds);
     const output = {
       ...delivered,
       format: reportedFormat(format),
@@ -191,7 +227,7 @@ export async function textToSpeech(
     };
     log.info('synthesized', {
       pieces: result.pieces,
-      bytes: result.data.byteLength,
+      bytes,
       audio_seconds: seconds,
       request_ids: requestIds,
       ms: Math.round(performance.now() - started),
@@ -201,8 +237,8 @@ export async function textToSpeech(
       'file_path' in delivered
         ? `saved to ${delivered.file_path}`
         : `available at ${delivered.audio_url}`;
-    if (args.include_audio && result.data.byteLength > MAX_INLINE_AUDIO_BYTES) {
-      const mb = (result.data.byteLength / (1024 * 1024)).toFixed(1);
+    if (args.include_audio && bytes > MAX_INLINE_AUDIO_BYTES) {
+      const mb = (bytes / (1024 * 1024)).toFixed(1);
       return toolError({
         message: `The audio was created and ${where}, but at ${mb} MB it is over the 1 MB limit for include_audio, so it is not returned inline. Do not synthesize this text again.`,
         next_step:
@@ -226,11 +262,7 @@ export async function textToSpeech(
           ? [
               {
                 type: 'audio' as const,
-                data: Buffer.from(
-                  result.data.buffer,
-                  result.data.byteOffset,
-                  result.data.byteLength,
-                ).toString('base64'),
+                data: (await readFile(committed.filePath)).toString('base64'),
                 mimeType: mimeTypeFor(format),
               },
             ]
@@ -243,6 +275,13 @@ export async function textToSpeech(
       // The client cancelled the call; nobody reads this result.
       log.info('cancelled', { request_ids: requestIds });
       return toolError({ message: 'The call was cancelled.', next_step: 'None.' });
+    }
+    if (error instanceof Mp3UnavailableError) {
+      return toolError({
+        message: error.message,
+        next_step:
+          'Use the default WAV output (omit output_format), an m1 voice, or text under 5,000 characters for MP3.',
+      });
     }
     if (error instanceof DeliveryError || error instanceof SynthesisInputError) {
       return toolError({

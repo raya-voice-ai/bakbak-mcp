@@ -114,6 +114,8 @@ export interface MockApi {
   intercept: Interceptor | undefined;
   /** Delay before answering each synthesis request, in milliseconds. */
   delayMs: number;
+  /** Answer mp3 requests with WAV bytes labelled audio/mpeg, as the standard model does. */
+  mp3AsWav: boolean;
   close(): Promise<void>;
 }
 
@@ -145,6 +147,7 @@ export async function startMockApi(): Promise<MockApi> {
     synthesisRequests: () => requests.filter((r) => r.path.startsWith('/v1/text-to-speech')),
     intercept: undefined,
     delayMs: 0,
+    mp3AsWav: false,
     close: async () => {
       wss.clients.forEach((c) => {
         c.terminate();
@@ -211,6 +214,15 @@ export async function startMockApi(): Promise<MockApi> {
           }) as OutputFormat;
           const rate = format.sample_rate ?? 24000;
           const headers: Record<string, string> = { 'X-Request-Id': `req_${n}` };
+          if (format.container === 'mp3' && api.mp3AsWav) {
+            const pcm = pcmFor(codePoints(text), n);
+            send(res, 200, Buffer.concat([wavHeader(pcm.byteLength, 24000), pcm]), {
+              ...headers,
+              'Content-Type': 'audio/mpeg',
+              'X-Audio-Format': 'mp3',
+            });
+            return;
+          }
           if (format.container === 'mp3') {
             send(res, 200, mp3For(codePoints(text)), {
               ...headers,

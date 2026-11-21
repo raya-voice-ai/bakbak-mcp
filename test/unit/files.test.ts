@@ -1,4 +1,13 @@
-import { mkdtemp, mkdir, readFile, readlink, symlink, writeFile, lstat } from 'node:fs/promises';
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  readlink,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -11,7 +20,8 @@ import {
   defaultOutputDir,
   resolveOutputDir,
   resolveOutputPath,
-  writeAudioFile,
+  placeFile,
+  windowsPathProblem,
 } from '../../src/local/files.js';
 
 describe('output directory', () => {
@@ -122,15 +132,21 @@ describe('output_path', () => {
     ).rejects.toThrow(OutputPathError);
   });
 
+  async function temp(name: string, content: string): Promise<string> {
+    const file = path.join(dir, name);
+    await writeFile(file, content);
+    return file;
+  }
+
   it('never overwrites without overwrite, and replaces atomically with it', async () => {
     const target = path.join(dir, 'a.wav');
-    await writeAudioFile(target, Buffer.from('one'), false);
-    await expect(writeAudioFile(target, Buffer.from('two'), false)).rejects.toThrow(
-      /already exists/,
-    );
+    await placeFile(await temp('.a.1.part', 'one'), target, false);
+    const second = await temp('.a.2.part', 'two');
+    await expect(placeFile(second, target, false)).rejects.toThrow(/already exists/);
     expect(await readFile(target, 'utf8')).toBe('one');
-    await writeAudioFile(target, Buffer.from('two'), true);
+    await placeFile(second, target, true);
     expect(await readFile(target, 'utf8')).toBe('two');
+    expect((await readdir(dir)).filter((n) => n.endsWith('.part'))).toEqual([]);
   });
 
   it('replaces a symlink at the target instead of writing through it', async () => {
@@ -138,13 +154,33 @@ describe('output_path', () => {
     await writeFile(victim, 'keep');
     const link = path.join(dir, 'link.wav');
     await symlink(victim, link);
-    await expect(writeAudioFile(link, Buffer.from('audio'), false)).rejects.toThrow(
+    await expect(placeFile(await temp('.l.1.part', 'audio'), link, false)).rejects.toThrow(
       /already exists/,
     );
     expect(await readlink(link)).toBe(victim);
-    await writeAudioFile(link, Buffer.from('audio'), true);
+    await placeFile(await temp('.l.2.part', 'audio'), link, true);
     expect((await lstat(link)).isSymbolicLink()).toBe(false);
     expect(await readFile(victim, 'utf8')).toBe('keep');
+  });
+
+  it.each([
+    ['\\\\server\\share\\a.wav', /network \(UNC\) or device/],
+    ['//server/share/a.wav', /network \(UNC\) or device/],
+    ['\\\\?\\C:\\a.wav', /network \(UNC\) or device/],
+    ['\\\\.\\COM1', /network \(UNC\) or device/],
+    ['C:a.wav', /full path/],
+    ['C:\\Users\\x\\NUL.wav', /reserved Windows name "NUL"/],
+    ['C:\\Users\\x\\com1.wav', /reserved Windows name "com1"/],
+  ])('refuses the Windows path %s', async (outputPath, message) => {
+    expect(windowsPathProblem(outputPath)).toMatch(message);
+    await expect(
+      resolveOutputPath({ outputDir: dir, outputPath, extensions: ['wav'], platform: 'win32' }),
+    ).rejects.toThrow(OutputPathError);
+  });
+
+  it('accepts ordinary Windows paths', () => {
+    expect(windowsPathProblem('C:\\Users\\x\\Documents\\Bakbak\\console.wav')).toBeUndefined();
+    expect(windowsPathProblem('clips\\a.wav')).toBeUndefined();
   });
 });
 

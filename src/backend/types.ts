@@ -70,11 +70,11 @@ export interface SynthesizedAudio {
   contentType: string | undefined;
 }
 
-/** Audio of several requests sent in order on one WebSocket context. */
+/** Outcome of several requests sent in order on one WebSocket context. */
 export interface StreamedPieces {
-  /** Raw audio of every piece, concatenated in order. */
-  audio: Uint8Array;
   requestIds: string[];
+  /** Bytes of audio delivered, across every piece. */
+  bytes: number;
 }
 
 export interface CallOptions {
@@ -89,19 +89,22 @@ export interface TtsClient {
   /** `POST /v1/text-to-speech`: one request, the whole file. */
   generate(params: SynthesisParams, options?: CallOptions): Promise<SynthesizedAudio>;
   /**
-   * Sends every piece, in order, on one WebSocket context, and returns their
-   * audio concatenated. `params.output_format.container` must be `raw`.
+   * Sends every piece, in order, on one WebSocket context, handing each chunk
+   * of audio to `onAudio` as it arrives (and waiting for it, so a slow writer
+   * slows the reading rather than buffering). `output_format.container` must
+   * be `raw`.
    */
   streamPieces(
     pieces: readonly string[],
     params: Omit<SynthesisParams, 'text'>,
+    onAudio: (chunk: Uint8Array) => Promise<void>,
     options?: CallOptions,
   ): Promise<StreamedPieces>;
 }
 
 /** What a failed call looked like, for turning into a tool error. */
 export interface BackendErrorInfo {
-  /** The SDK error class name, e.g. `InsufficientCreditsError`. */
+  /** The SDK error class name, e.g. `InsufficientCreditsError`, or `ServerShuttingDown`. */
   type: string;
   /** HTTP status (or the in-band `status_code`), when the service answered. */
   status: number | undefined;
@@ -117,8 +120,17 @@ export interface BackendErrorInfo {
 }
 
 export interface Backend {
-  /** A client for this key. Implementations reuse connections per key. */
+  /**
+   * A client for an API key already known to be valid. Implementations keep
+   * one per key to reuse connections, and never close one with calls running.
+   */
   client(apiKey: string): TtsClient;
+  /**
+   * Checks a key with `GET /v1/voices` (free) on a one-off client that is not
+   * kept, so unverified keys never occupy a slot. Resolves with the voices;
+   * rejects with the API's error (e.g. 401 for a wrong key).
+   */
+  checkKey(apiKey: string): Promise<Voice[]>;
   /** The SDK's sentence segmenter, with pieces of at most `maxChars` code points. */
   splitSentences(text: string, maxChars: number): string[];
   /** Wraps raw mono PCM (or G.711) in a WAV header. */
@@ -127,5 +139,6 @@ export interface Backend {
   describeError(error: unknown): BackendErrorInfo | undefined;
   /** The API base URL in use (for error messages). */
   readonly baseURL: string;
+  /** Stops every client; calls still running fail with a `ServerShuttingDown` error. */
   close(): Promise<void>;
 }

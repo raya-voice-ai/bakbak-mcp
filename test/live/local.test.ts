@@ -70,16 +70,26 @@ describe.skipIf(!LIVE)('live: local mode', () => {
     const voice = voices.voices[0]!;
     const client = h.backend.client(LIVE_KEY);
     const started = performance.now();
-    const streamed = await client.streamPieces(['पहला वाक्य यह है।', 'और यह दूसरा वाक्य है।'], {
-      voice_id: voice.id,
-      language: 'hi',
-      model: voice.model,
-      output_format: { container: 'raw', encoding: 'pcm_s16le', sample_rate: 24000 },
-    });
+    const chunks: Uint8Array[] = [];
+    const streamed = await client.streamPieces(
+      ['पहला वाक्य यह है।', 'और यह दूसरा वाक्य है।'],
+      {
+        voice_id: voice.id,
+        language: 'hi',
+        model: voice.model,
+        output_format: { container: 'raw', encoding: 'pcm_s16le', sample_rate: 24000 },
+      },
+      (chunk) => {
+        chunks.push(chunk);
+        return Promise.resolve();
+      },
+    );
     const ms = performance.now() - started;
     expect(streamed.requestIds).toHaveLength(2);
-    const wav = decodeWav(h.backend.toWav(streamed.audio, 'pcm_s16le', 24000));
-    expect(wav.seconds).toBeCloseTo(streamed.audio.byteLength / 2 / 24000, 6);
+    const pcm = Buffer.concat(chunks);
+    expect(pcm.byteLength).toBe(streamed.bytes);
+    const wav = decodeWav(h.backend.toWav(pcm, 'pcm_s16le', 24000));
+    expect(wav.seconds).toBeCloseTo(pcm.byteLength / 2 / 24000, 6);
     expect(wav.seconds).toBeGreaterThan(1);
     expect(wav.rms).toBeGreaterThan(50);
     console.info(

@@ -55,6 +55,12 @@ function nextStepFor(info: BackendErrorInfo, mode: ServerMode, baseURL: string):
   if (info.type === 'StreamInterruptedError') {
     return 'The audio stream broke part-way, so nothing was saved. Try again; if it keeps failing, use shorter text.';
   }
+  if (info.type === 'ServerShuttingDown') {
+    return 'The MCP server is restarting. Nothing was saved; try again in a moment.';
+  }
+  if (info.type === 'WebSocketClosedError') {
+    return 'The connection to Bakbak closed before the audio was finished, so nothing was saved. Try again.';
+  }
   if (info.connection) {
     return info.type === 'APITimeoutError'
       ? 'The service took too long to answer. Try again in a moment, or with shorter text.'

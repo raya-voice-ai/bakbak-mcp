@@ -36,6 +36,11 @@ export class VoiceCache {
     return hit && hit.expires > this.now() ? hit.settled : undefined;
   }
 
+  /** Stores a voice list fetched elsewhere (e.g. while checking the key). */
+  seed(apiKey: string, voices: Voice[]): void {
+    void this.get(apiKey, () => Promise.resolve(voices));
+  }
+
   /** The voice list for this key, from cache or from `fetch`. Failures are not cached. */
   get(apiKey: string, fetch: () => Promise<Voice[]>): Promise<Voice[]> {
     const id = fingerprint(apiKey);

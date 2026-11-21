@@ -1,7 +1,10 @@
 /**
- * The production backend, on the official `bakbak` JS SDK. One SDK client per
- * API key is kept (bounded, evicted when idle), so HTTP connections and the
- * WebSocket are reused across tool calls.
+ * The production backend, on the official `bakbak` JS SDK.
+ *
+ * One SDK client per valid API key is kept so HTTP connections and the
+ * WebSocket are reused across tool calls. The set is bounded, but a client
+ * with calls in flight is never evicted, and unverified keys never get a slot:
+ * they are checked on a one-off client (`checkKey`).
  */
 
 import {
@@ -17,7 +20,7 @@ import {
 } from 'bakbak';
 
 import type { Logger } from '../log.js';
-import { concatBytes, fingerprint } from '../util.js';
+import { fingerprint } from '../util.js';
 import { PACKAGE_NAME, VERSION } from '../version.js';
 import type {
   Backend,
@@ -35,13 +38,21 @@ import type {
 export const DEFAULT_BASE_URL = 'https://hub.getraya.app';
 
 export interface SdkBackendOptions {
-  /** API base URL; defaults to the SDK's (`https://hub.getraya.app`). */
+  /** API base URL; defaults to `https://hub.getraya.app`. */
   baseURL?: string | undefined;
   logger: Logger;
-  /** Most per-key clients kept at once (hosted mode serves many keys). */
+  /** Most idle per-key clients kept at once (hosted mode serves many keys). */
   maxClients?: number;
-  /** A client unused this long is closed. */
+  /** An idle client unused this long is closed. */
   idleMs?: number;
+}
+
+/** Raised for calls stopped because the server is shutting down. */
+export class ServerShuttingDownError extends Error {
+  override readonly name = 'ServerShuttingDown';
+  constructor() {
+    super('This server is shutting down, so the call was stopped before the audio was finished.');
+  }
 }
 
 function wireParams(params: Omit<SynthesisParams, 'text'>): Omit<TTSParams, 'text'> {
@@ -62,91 +73,113 @@ function wireParams(params: Omit<SynthesisParams, 'text'>): Omit<TTSParams, 'tex
   };
 }
 
+function toVoices(list: {
+  voices: { id: string; name: string; language: string; model: string }[];
+}): Voice[] {
+  return list.voices.map((v) => ({ id: v.id, name: v.name, language: v.language, model: v.model }));
+}
+
 class SdkClient implements TtsClient {
   lastUsed = Date.now();
+  /** Calls in flight; a client with any is never evicted. */
+  active = 0;
+  private closed = false;
   private socket: TTSWebSocket | undefined;
 
   constructor(private readonly sdk: Bakbak) {}
 
-  async listVoices(options: CallOptions = {}): Promise<Voice[]> {
+  private async track<T>(work: () => Promise<T>): Promise<T> {
+    this.active++;
     this.lastUsed = Date.now();
-    const list = await this.sdk.voices.list(undefined, { signal: options.signal });
-    return list.voices.map((v) => ({
-      id: v.id,
-      name: v.name,
-      language: v.language,
-      model: v.model,
-    }));
+    try {
+      return await work();
+    } catch (error) {
+      throw this.closed ? new ServerShuttingDownError() : error;
+    } finally {
+      this.active--;
+      this.lastUsed = Date.now();
+    }
   }
 
-  async generate(params: SynthesisParams, options: CallOptions = {}): Promise<SynthesizedAudio> {
-    this.lastUsed = Date.now();
-    const audio = await this.sdk.tts.generate(
-      { ...wireParams(params), text: params.text },
-      { signal: options.signal },
+  listVoices(options: CallOptions = {}): Promise<Voice[]> {
+    return this.track(async () =>
+      toVoices(await this.sdk.voices.list(undefined, { signal: options.signal })),
     );
-    return { data: audio.data, requestId: audio.requestId, contentType: audio.contentType };
   }
 
-  async streamPieces(
+  generate(params: SynthesisParams, options: CallOptions = {}): Promise<SynthesizedAudio> {
+    return this.track(async () => {
+      const audio = await this.sdk.tts.generate(
+        { ...wireParams(params), text: params.text },
+        { signal: options.signal },
+      );
+      return { data: audio.data, requestId: audio.requestId, contentType: audio.contentType };
+    });
+  }
+
+  streamPieces(
     pieces: readonly string[],
     params: Omit<SynthesisParams, 'text'>,
+    onAudio: (chunk: Uint8Array) => Promise<void>,
     options: CallOptions = {},
   ): Promise<StreamedPieces> {
-    this.lastUsed = Date.now();
-    this.socket ??= this.sdk.tts.websocket();
-    const ctx = this.socket.context(wireParams(params));
-    const { signal, onPieceDone } = options;
-    signal?.throwIfAborted();
+    return this.track(async () => {
+      this.socket ??= this.sdk.tts.websocket();
+      const ctx = this.socket.context(wireParams(params));
+      const { signal, onPieceDone } = options;
+      signal?.throwIfAborted();
 
-    // An object, not a `let`: it is flipped from callbacks the compiler cannot see.
-    const state = { stopped: false };
-    const sending = (async () => {
+      // An object, not a `let`: it is flipped from callbacks the compiler cannot see.
+      const state = { stopped: false };
+      const sending = (async () => {
+        try {
+          for (const text of pieces) {
+            if (state.stopped) break;
+            await ctx.send({ text });
+          }
+        } finally {
+          ctx.endInput();
+        }
+      })();
+      sending.catch(() => undefined); // awaited below; never left unhandled
+
+      const onAbort = (): void => {
+        state.stopped = true;
+        ctx.cancel().catch(() => undefined);
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      const requestIds: string[] = [];
+      let bytes = 0;
       try {
-        for (const text of pieces) {
-          if (state.stopped) break;
-          await ctx.send({ text });
+        for await (const event of ctx.events()) {
+          this.lastUsed = Date.now();
+          if (event.type === 'chunk') {
+            bytes += event.audio.byteLength;
+            await onAudio(event.audio);
+          } else if (event.type === 'done') {
+            if (event.request.requestId) requestIds.push(event.request.requestId);
+            onPieceDone?.(requestIds.length, pieces.length);
+          } else if (event.type === 'failed') {
+            throw event.error;
+          } else {
+            throw signal?.reason ?? new BakbakError('The synthesis was cancelled.');
+          }
         }
+        await sending;
+      } catch (error) {
+        // Stop the remaining pieces: their audio would be billed and thrown away.
+        state.stopped = true;
+        await ctx.cancel().catch(() => undefined);
+        throw error;
       } finally {
-        ctx.endInput();
+        signal?.removeEventListener('abort', onAbort);
       }
-    })();
-    sending.catch(() => undefined); // awaited below; never left unhandled
-
-    const onAbort = (): void => {
-      state.stopped = true;
-      ctx.cancel().catch(() => undefined);
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-    const parts: Uint8Array[] = [];
-    const requestIds: string[] = [];
-    try {
-      for await (const event of ctx.events()) {
-        this.lastUsed = Date.now();
-        if (event.type === 'chunk') {
-          parts.push(event.audio);
-        } else if (event.type === 'done') {
-          if (event.request.requestId) requestIds.push(event.request.requestId);
-          onPieceDone?.(requestIds.length, pieces.length);
-        } else if (event.type === 'failed') {
-          throw event.error;
-        } else {
-          throw signal?.reason ?? new BakbakError('The synthesis was cancelled.');
-        }
-      }
-      await sending;
-    } catch (error) {
-      // Stop the remaining pieces: their audio would be billed and thrown away.
-      state.stopped = true;
-      await ctx.cancel().catch(() => undefined);
-      throw error;
-    } finally {
-      signal?.removeEventListener('abort', onAbort);
-    }
-    return { audio: concatBytes(parts), requestIds };
+      return { requestIds, bytes };
+    });
   }
 
   async close(): Promise<void> {
+    this.closed = true;
     const socket = this.socket;
     this.socket = undefined;
     await socket?.close();
@@ -171,12 +204,16 @@ export function createSdkBackend(options: SdkBackendOptions): Backend {
     },
   };
   const baseURL = (options.baseURL?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, '');
-  const make = (apiKey: string): Bakbak =>
+  const defaultHeaders = {
+    'X-Bakbak-Client': `${PACKAGE_NAME}/${VERSION} bakbak-js/${SDK_VERSION}`,
+  };
+  const make = (apiKey: string, maxRetries?: number): Bakbak =>
     new Bakbak({
       apiKey,
       baseURL,
       logger: sdkLogger,
-      defaultHeaders: { 'X-Bakbak-Client': `${PACKAGE_NAME}/${VERSION} bakbak-js/${SDK_VERSION}` },
+      defaultHeaders,
+      ...(maxRetries !== undefined && { maxRetries }),
     });
 
   const evict = (id: string, client: SdkClient): void => {
@@ -185,10 +222,17 @@ export function createSdkBackend(options: SdkBackendOptions): Backend {
       logger.debug('closing an idle client failed', { error });
     });
   };
+  /** Drops idle clients, oldest first, while over the bound. Busy clients stay. */
+  const trim = (): void => {
+    for (const [id, client] of clients) {
+      if (clients.size <= maxClients) break;
+      if (client.active === 0) evict(id, client);
+    }
+  };
   const sweeper = setInterval(() => {
     const cutoff = Date.now() - idleMs;
     for (const [id, client] of clients) {
-      if (client.lastUsed < cutoff) evict(id, client);
+      if (client.active === 0 && client.lastUsed < cutoff) evict(id, client);
     }
   }, 60_000);
   sweeper.unref();
@@ -197,18 +241,15 @@ export function createSdkBackend(options: SdkBackendOptions): Backend {
     baseURL,
     client(apiKey) {
       const id = fingerprint(apiKey);
-      let client = clients.get(id);
-      if (client) {
-        clients.delete(id); // re-insert: Map order tracks recency
-      } else {
-        client = new SdkClient(make(apiKey));
-      }
+      const client = clients.get(id) ?? new SdkClient(make(apiKey));
+      clients.delete(id); // re-insert: Map order tracks recency
       clients.set(id, client);
-      for (const [oldestId, oldest] of clients) {
-        if (clients.size <= maxClients) break;
-        evict(oldestId, oldest);
-      }
+      trim();
       return client;
+    },
+    async checkKey(apiKey) {
+      // A one-off client: an unverified key must never take a slot in `clients`.
+      return toVoices(await make(apiKey, 0).voices.list());
     },
     splitSentences(text, maxChars) {
       return splitSentences(text, { maxChars });
@@ -217,6 +258,18 @@ export function createSdkBackend(options: SdkBackendOptions): Backend {
       return toWav(audio, { encoding, sampleRate });
     },
     describeError(error): BackendErrorInfo | undefined {
+      if (error instanceof ServerShuttingDownError) {
+        return {
+          type: error.name,
+          status: undefined,
+          errorCode: undefined,
+          message: error.message,
+          retryable: true,
+          requestId: undefined,
+          audioBytes: undefined,
+          connection: false,
+        };
+      }
       if (!(error instanceof BakbakError)) return undefined;
       return {
         type: error.name,

@@ -50,37 +50,88 @@ export function readCredential(
   return { ok: false, error: 'missing' };
 }
 
+interface Verdict {
+  check: 'valid' | 'invalid';
+  until: number;
+}
+
+export interface KeyCheckerOptions {
+  /** How long a valid key is believed without asking again. */
+  validTtlMs?: number;
+  /** How long a rejected key is refused without asking again. */
+  invalidTtlMs?: number;
+  /** Most verdicts remembered; the oldest are forgotten first. */
+  maxEntries?: number;
+  now?: () => number;
+}
+
 /**
- * Checks keys with `GET /v1/voices` (which also warms the voice cache).
- * Rejections are remembered for a minute so a wrong key cannot drive traffic.
+ * Checks keys with `GET /v1/voices` on a one-off client (`Backend.checkKey`),
+ * so an unverified key never takes one of the backend's per-key client slots.
+ * Verdicts are cached (valid for 10 minutes, rejected for 1 minute), and
+ * concurrent checks of the same key share one request.
  */
 export class KeyChecker {
-  private readonly rejected = new Map<string, number>();
+  private readonly verdicts = new Map<string, Verdict>();
+  private readonly pending = new Map<string, Promise<KeyCheck>>();
+  private readonly validTtlMs: number;
+  private readonly invalidTtlMs: number;
+  private readonly maxEntries: number;
+  private readonly now: () => number;
 
   constructor(
     private readonly backend: Backend,
     private readonly voices: VoiceCache,
-    private readonly rejectionTtlMs = 60_000,
-    private readonly now: () => number = Date.now,
-  ) {}
+    options: KeyCheckerOptions = {},
+  ) {
+    this.validTtlMs = options.validTtlMs ?? 10 * 60_000;
+    this.invalidTtlMs = options.invalidTtlMs ?? 60_000;
+    this.maxEntries = options.maxEntries ?? 20_000;
+    this.now = options.now ?? Date.now;
+  }
 
-  async check(apiKey: string): Promise<KeyCheck> {
-    const id = fingerprint(apiKey);
-    const now = this.now();
-    const rejectedUntil = this.rejected.get(id);
-    if (rejectedUntil !== undefined && rejectedUntil > now) return 'invalid';
-    try {
-      await this.voices.get(apiKey, () => this.backend.client(apiKey).listVoices());
-      this.rejected.delete(id);
-      return 'valid';
-    } catch (error) {
-      const status = this.backend.describeError(error)?.status;
-      if (status === 401 || status === 403) {
-        if (this.rejected.size > 10_000) this.rejected.clear();
-        this.rejected.set(id, now + this.rejectionTtlMs);
-        return 'invalid';
-      }
-      return 'unavailable';
+  /** The remembered verdict for this key, if any; never contacts the API. */
+  cached(apiKey: string): KeyCheck | undefined {
+    const verdict = this.verdicts.get(fingerprint(apiKey));
+    return verdict && verdict.until > this.now() ? verdict.check : undefined;
+  }
+
+  private remember(id: string, check: 'valid' | 'invalid'): void {
+    this.verdicts.delete(id);
+    this.verdicts.set(id, {
+      check,
+      until: this.now() + (check === 'valid' ? this.validTtlMs : this.invalidTtlMs),
+    });
+    for (const oldest of this.verdicts.keys()) {
+      if (this.verdicts.size <= this.maxEntries) break;
+      this.verdicts.delete(oldest);
     }
+  }
+
+  /** The verdict for this key, asking the API when nothing is cached. */
+  check(apiKey: string): Promise<KeyCheck> {
+    const hit = this.cached(apiKey);
+    if (hit) return Promise.resolve(hit);
+    const id = fingerprint(apiKey);
+    const running = this.pending.get(id);
+    if (running) return running;
+    const check = this.backend.checkKey(apiKey).then(
+      (voices): KeyCheck => {
+        this.remember(id, 'valid');
+        this.voices.seed(apiKey, voices);
+        return 'valid';
+      },
+      (error: unknown): KeyCheck => {
+        const status = this.backend.describeError(error)?.status;
+        if (status === 401 || status === 403) {
+          this.remember(id, 'invalid');
+          return 'invalid';
+        }
+        return 'unavailable';
+      },
+    );
+    this.pending.set(id, check);
+    void check.finally(() => this.pending.delete(id));
+    return check;
   }
 }

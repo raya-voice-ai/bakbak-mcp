@@ -122,3 +122,34 @@ export function isPublicAddress(address: string): boolean {
   if (family(ip) === 'ipv6' && !contains(GLOBAL_IPV6, ip)) return false;
   return !contains(NON_PUBLIC, ip);
 }
+
+/** The eight 16-bit groups of an IPv6 address, as numbers. */
+function ipv6Groups(address: string): number[] {
+  let text = address;
+  const v4 = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(text);
+  if (v4) {
+    const [a = 0, b = 0, c = 0, d = 0] = v4.slice(1).map(Number);
+    text = `${text.slice(0, v4.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const [head = '', tail] = text.split('::');
+  const left = head === '' ? [] : head.split(':');
+  const right = tail === undefined || tail === '' ? [] : tail.split(':');
+  const missing = 8 - left.length - right.length;
+  return [...left, ...Array<string>(tail === undefined ? 0 : missing).fill('0'), ...right].map(
+    (g) => Number.parseInt(g, 16),
+  );
+}
+
+/**
+ * The key a per-address rate limit counts against: the address itself for
+ * IPv4, and its /64 for IPv6, since one subscriber usually holds a whole /64
+ * and could otherwise rotate through it to dodge the limit.
+ */
+export function rateLimitKey(address: string): string {
+  const ip = normalizeIp(address);
+  if (!ip || isIP(ip) === 4) return ip ?? address;
+  return `${ipv6Groups(ip)
+    .slice(0, 4)
+    .map((g) => g.toString(16))
+    .join(':')}::/64`;
+}

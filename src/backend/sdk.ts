@@ -186,6 +186,13 @@ class SdkClient implements TtsClient {
   }
 }
 
+/** A client whose every call fails with `error` (for keys the SDK will not accept). */
+function failingClient(error: unknown): TtsClient {
+  const fail = (): Promise<never> =>
+    Promise.reject(error instanceof Error ? error : new Error(String(error)));
+  return { listVoices: fail, generate: fail, streamPieces: fail };
+}
+
 /** Creates the SDK-backed {@link Backend}. */
 export function createSdkBackend(options: SdkBackendOptions): Backend {
   const { logger } = options;
@@ -241,7 +248,17 @@ export function createSdkBackend(options: SdkBackendOptions): Backend {
     baseURL,
     client(apiKey) {
       const id = fingerprint(apiKey);
-      const client = clients.get(id) ?? new SdkClient(make(apiKey));
+      const existing = clients.get(id);
+      let sdk: Bakbak | undefined;
+      if (!existing) {
+        try {
+          sdk = make(apiKey);
+        } catch (error) {
+          // The SDK refuses malformed keys (e.g. with spaces) when constructed: report it per call.
+          return failingClient(error);
+        }
+      }
+      const client = existing ?? new SdkClient(sdk as Bakbak);
       clients.delete(id); // re-insert: Map order tracks recency
       clients.set(id, client);
       trim();

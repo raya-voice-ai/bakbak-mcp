@@ -122,8 +122,11 @@ export class KeyChecker {
         return 'valid';
       },
       (error: unknown): KeyCheck => {
-        const status = this.backend.describeError(error)?.status;
-        if (status === 401 || status === 403) {
+        const info = this.backend.describeError(error);
+        // 401/403 from the API, or a key the SDK refuses to send (no status, no network).
+        const refusedLocally =
+          info?.type === 'BakbakError' && info.status === undefined && !info.connection;
+        if (info?.status === 401 || info?.status === 403 || refusedLocally) {
           this.remember(id, 'invalid');
           return 'invalid';
         }

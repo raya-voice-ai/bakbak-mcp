@@ -61,6 +61,11 @@ function nextStepFor(info: BackendErrorInfo, mode: ServerMode, baseURL: string):
   if (info.type === 'WebSocketClosedError') {
     return 'The connection to Bakbak closed before the audio was finished, so nothing was saved. Try again.';
   }
+  if (!info.connection && info.status === undefined && info.type === 'BakbakError') {
+    return mode === 'local'
+      ? 'Check BAKBAK_API_KEY (no spaces or line breaks) and BAKBAK_BASE_URL in the server environment.'
+      : `Check the API key from ${DASHBOARD_URL} and connect again.`;
+  }
   if (info.connection) {
     return info.type === 'APITimeoutError'
       ? 'The service took too long to answer. Try again in a moment, or with shorter text.'

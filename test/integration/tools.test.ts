@@ -526,6 +526,17 @@ describe('cancellation', () => {
 });
 
 describe('review regressions', () => {
+  it('explains a malformed key instead of failing the server', async () => {
+    const spaced = await connectLocal(api.baseURL, { apiKey: 'not a valid key' });
+    try {
+      const result = await spaced.client.callTool({ name: 'list_voices', arguments: {} });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/BAKBAK_API_KEY/);
+    } finally {
+      await spaced.close();
+    }
+  });
+
   it('requires an encoding for raw and wav before calling the API', async () => {
     for (const container of ['raw', 'wav']) {
       const result = await call('text_to_speech', {

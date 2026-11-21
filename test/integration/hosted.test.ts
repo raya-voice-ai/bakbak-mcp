@@ -502,6 +502,12 @@ describe('claude.ai connector flow', () => {
     expect(await wrong.text()).toMatch(
       /did not accept that API key[\s\S]*role="alert"|role="alert"[\s\S]*did not accept that API key/,
     );
+    const spaced = await fetch(`${base}/authorize`, {
+      ...form({ request, csrf_token: csrf, api_key: 'test key with spaces', action: 'connect' }),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie },
+      redirect: 'manual',
+    });
+    expect(spaced.status).toBe(400);
     const forged = await fetch(`${base}/authorize`, {
       ...form({ request, csrf_token: csrf, api_key: TEST_KEY, action: 'connect' }),
       redirect: 'manual',

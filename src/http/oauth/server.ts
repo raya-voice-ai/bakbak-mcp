@@ -90,6 +90,8 @@ interface PendingRequest {
   state: string | undefined;
   resource: string;
   scope: string | undefined;
+  /** Whether the client sent redirect_uri (then /token must send it too). */
+  redirectPresented: boolean;
   nonce: string;
 }
 
@@ -263,10 +265,15 @@ export class OAuthServer {
       res: pending.resource,
       ...(pending.state !== undefined && { st: pending.state }),
       ...(pending.scope !== undefined && { s: pending.scope }),
+      ...(pending.redirectPresented && { rp: 1 }),
       n: csrf,
       exp: Math.floor(Date.now() / 1000) + PENDING_REQUEST_TTL_S,
     });
     const target = new URL(pending.redirectUri);
+    const web = target.protocol === 'https:' || target.protocol === 'http:';
+    // A native app's own scheme has no origin; CSP and the page name the scheme instead.
+    const formTarget = web ? target.origin : target.protocol;
+    const returnTo = web ? target.host : `${target.protocol}//${target.host}`;
     const cookieFlags = `Path=/; HttpOnly; SameSite=Strict; Max-Age=${PENDING_REQUEST_TTL_S}${this.secureCookie ? '; Secure' : ''}`;
     sendHtml(
       res,
@@ -274,13 +281,13 @@ export class OAuthServer {
       consentPage({
         nonce,
         clientName: client.name,
-        redirectHost: target.host,
+        redirectHost: returnTo,
         request,
         csrfToken: csrf,
         error,
       }),
       {
-        ...this.pageHeaders(nonce, target.origin),
+        ...this.pageHeaders(nonce, formTarget),
         'Set-Cookie': `${this.cookieName}=${csrf}; ${cookieFlags}`,
       },
     );
@@ -318,6 +325,7 @@ export class OAuthServer {
       client = await resolveClient(this.options.sealer, this.options.documents, clientId);
     } catch (error) {
       if (!(error instanceof ClientError)) throw error;
+      this.options.logger.debug('client not resolved', { error: error.cause ?? error });
       this.showError(res, 400, 'Unknown app', `This app could not be identified: ${error.message}`);
       return;
     }
@@ -342,31 +350,24 @@ export class OAuthServer {
       return;
     }
 
-    // From here on, errors go back to the app.
+    // Until the person has acted on the consent page, problems are shown here and never
+    // redirected: anyone can register a redirect URI, so redirecting errors from this
+    // GET would make this server an open redirector (RFC 9700 §4.11.2).
+    const refuse = (message: string): void => {
+      this.showError(res, 400, 'This connection request is invalid', message);
+    };
     const state = single('state');
     if (state !== undefined && state.length > MAX_STATE_LENGTH) {
-      this.redirectWithError(res, redirectUri, undefined, 'invalid_request', 'state is too long.');
+      refuse('The state parameter is too long.');
       return;
     }
     if (single('response_type') !== 'code') {
-      this.redirectWithError(
-        res,
-        redirectUri,
-        state,
-        'unsupported_response_type',
-        'Only response_type=code is supported.',
-      );
+      refuse('Only response_type=code is supported.');
       return;
     }
     const challenge = single('code_challenge');
     if (single('code_challenge_method') !== 'S256' || !challenge || !isValidChallenge(challenge)) {
-      this.redirectWithError(
-        res,
-        redirectUri,
-        state,
-        'invalid_request',
-        'PKCE is required: send code_challenge with code_challenge_method=S256.',
-      );
+      refuse('PKCE is required: send code_challenge with code_challenge_method=S256.');
       return;
     }
     const resources = query.getAll('resource');
@@ -374,13 +375,7 @@ export class OAuthServer {
       resources.length > 1 ||
       (resources.length === 1 && !this.isOwnResource(resources[0] ?? ''))
     ) {
-      this.redirectWithError(
-        res,
-        redirectUri,
-        state,
-        'invalid_target',
-        `The only resource here is ${this.options.resourceUrl}.`,
-      );
+      refuse(`The only resource here is ${this.options.resourceUrl}.`);
       return;
     }
     this.renderConsent(res, client, {
@@ -390,6 +385,7 @@ export class OAuthServer {
       state,
       resource: this.options.resourceUrl,
       scope: single('scope'),
+      redirectPresented: presented !== undefined,
     });
   }
 
@@ -414,6 +410,7 @@ export class OAuthServer {
       resource: res,
       state: typeof st === 'string' ? st : undefined,
       scope: typeof s === 'string' ? s : undefined,
+      redirectPresented: data.rp === 1,
       nonce: n,
     };
   }
@@ -468,6 +465,7 @@ export class OAuthServer {
       client = await resolveClient(this.options.sealer, this.options.documents, pending.clientId);
     } catch (error) {
       if (!(error instanceof ClientError)) throw error;
+      this.options.logger.debug('client not resolved', { error: error.cause ?? error });
       this.showError(res, 400, 'Unknown app', `This app could not be identified: ${error.message}`);
       return;
     }
@@ -489,6 +487,7 @@ export class OAuthServer {
       codeChallenge: pending.codeChallenge,
       resource: pending.resource,
       scope: pending.scope,
+      redirectPresented: pending.redirectPresented,
     });
     this.options.logger.info('authorized', { client: clientHash(pending.clientId) });
     const url = new URL(pending.redirectUri);
@@ -600,7 +599,9 @@ export class OAuthServer {
 
     const grantType = fields.get('grant_type');
     if (grantType === 'authorization_code') {
-      const grant = this.options.tokens.redeemCode(fields.get('code') ?? '');
+      // Everything is checked before the code is marked used, so a failed attempt
+      // (wrong verifier, wrong client) cannot spend the legitimate client's code.
+      const grant = this.options.tokens.openCode(fields.get('code') ?? '');
       if (!grant || grant.clientHash !== clientHash(clientId)) {
         this.tokenError(
           res,
@@ -610,7 +611,12 @@ export class OAuthServer {
         );
         return;
       }
-      if (fields.get('redirect_uri') !== grant.redirectUri) {
+      // redirect_uri is required here exactly when it was sent to /authorize (RFC 6749 §4.1.3).
+      const redirectUri = fields.get('redirect_uri');
+      if (
+        (grant.redirectPresented || redirectUri !== undefined) &&
+        redirectUri !== grant.redirectUri
+      ) {
         this.tokenError(
           res,
           400,
@@ -622,6 +628,10 @@ export class OAuthServer {
       const verifier = fields.get('code_verifier') ?? '';
       if (!isValidVerifier(verifier) || pkceChallenge(verifier) !== grant.codeChallenge) {
         this.tokenError(res, 400, 'invalid_grant', 'PKCE verification failed.');
+        return;
+      }
+      if (!this.options.tokens.markRedeemed(grant)) {
+        this.tokenError(res, 400, 'invalid_grant', 'The authorization code was already used.');
         return;
       }
       this.options.logger.info('tokens issued', {

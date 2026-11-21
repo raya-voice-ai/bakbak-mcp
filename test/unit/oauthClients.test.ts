@@ -21,7 +21,16 @@ describe('redirect URIs', () => {
     ['http://localhost/callback', true],
     ['http://[::1]:9000/cb', true],
     ['http://example.com/cb', false],
-    ['cursor://anysphere.cursor-mcp/oauth/callback', false],
+    ['cursor://anysphere.cursor-mcp/oauth/callback', true],
+    ['vscode://vscode.github-authentication/did-authenticate', true],
+    ['com.example.app:/oauth2redirect', true],
+    ['data:text/html,<script>alert(1)</script>', false],
+    ['file:///etc/passwd', false],
+    ['vbscript:msgbox(1)', false],
+    ['about:blank', false],
+    ['blob:https://evil.example/uuid', false],
+    ['wss://evil.example/cb', false],
+    ['cursor://anysphere.cursor-mcp/cb#frag', false],
     ['https://claude.ai/cb#frag', false],
     ['https://user:pw@claude.ai/cb', false],
     ['javascript:alert(1)', false],
@@ -54,6 +63,10 @@ describe('redirect URIs', () => {
     expect(redirectMatches('http://127.0.0.1/callback', 'https://127.0.0.1:5000/callback')).toBe(
       false,
     );
+    // Private-use schemes match exactly.
+    expect(redirectMatches('cursor://a.b/cb', 'cursor://a.b/cb')).toBe(true);
+    expect(redirectMatches('cursor://a.b/cb', 'cursor://a.b/cb2')).toBe(false);
+    expect(redirectMatches('cursor://a.b/cb', 'cursor://a.b:99/cb')).toBe(false);
   });
 });
 
@@ -151,14 +164,23 @@ describe('client id metadata documents', () => {
     expect(fetches).toBe(1);
   });
 
-  it('refuses documents whose client_id differs, or that want a secret', async () => {
-    const wrongId = new ClientMetadataResolver(() =>
-      Promise.resolve({
-        body: JSON.stringify({ ...doc, client_id: 'https://other.example/x' }),
-        maxAgeSeconds: 60,
-      }),
-    );
-    await expect(resolveClient(sealer, wrongId, url)).rejects.toThrow(/does not match/);
+  it('refuses bad documents and fetch failures with one message that reveals nothing', async () => {
+    const failures = [
+      () =>
+        Promise.resolve({
+          body: JSON.stringify({ ...doc, client_id: 'https://other.example/x' }),
+          maxAgeSeconds: 60,
+        }),
+      () => Promise.resolve({ body: 'not json', maxAgeSeconds: 60 }),
+      () => Promise.reject(new Error('internal.example resolves to 10.1.2.3, not public')),
+    ];
+    for (const fetcher of failures) {
+      const error = await resolveClient(sealer, new ClientMetadataResolver(fetcher), url).catch(
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(ClientError);
+      expect((error as Error).message).toBe("Could not load the client's metadata document.");
+    }
     const secret = new ClientMetadataResolver(() =>
       Promise.resolve({
         body: JSON.stringify({ ...doc, token_endpoint_auth_method: 'client_secret_basic' }),

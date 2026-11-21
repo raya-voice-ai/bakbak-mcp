@@ -36,8 +36,9 @@ export class ClientError extends Error {
   constructor(
     readonly code: 'invalid_client' | 'invalid_redirect_uri' | 'invalid_client_metadata',
     message: string,
+    cause?: unknown,
   ) {
-    super(message);
+    super(message, cause === undefined ? undefined : { cause });
   }
 }
 
@@ -45,6 +46,24 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', '[::1]', 'localhost']);
 const MAX_REDIRECT_URIS = 5;
 const MAX_REDIRECT_URI_LENGTH = 512;
 const MAX_NAME_LENGTH = 80;
+
+/**
+ * Schemes that are never a native app's redirect: script and data URLs, local
+ * files and browser internals. (http and https have their own rules.)
+ */
+const REFUSED_SCHEMES = new Set([
+  'javascript:',
+  'data:',
+  'file:',
+  'vbscript:',
+  'about:',
+  'blob:',
+  'filesystem:',
+  'view-source:',
+  'ws:',
+  'wss:',
+  'ftp:',
+]);
 
 function parseRedirect(uri: string): URL | undefined {
   try {
@@ -54,14 +73,30 @@ function parseRedirect(uri: string): URL | undefined {
   }
 }
 
-/** Whether a redirect URI is acceptable at registration: https, or http on loopback; no fragment or credentials. */
+/** Whether a redirect URI uses a private-use scheme (RFC 8252 §7.1), e.g. `cursor://…`. */
+export function isPrivateUseRedirect(url: URL): boolean {
+  return (
+    url.protocol !== 'http:' &&
+    url.protocol !== 'https:' &&
+    /^[a-z][a-z0-9+.-]*:$/.test(url.protocol) &&
+    !REFUSED_SCHEMES.has(url.protocol)
+  );
+}
+
+/**
+ * Whether a redirect URI is acceptable at registration: https; http on a
+ * loopback address (native apps, RFC 8252 §7.3); or a private-use scheme of a
+ * native app (RFC 8252 §7.1). Never a fragment or credentials.
+ */
 export function isAllowedRedirectUri(uri: string): boolean {
   if (uri.length > MAX_REDIRECT_URI_LENGTH) return false;
   const url = parseRedirect(uri);
-  if (!url || url.hash !== '' || uri.includes('#') || url.username !== '' || url.password !== '')
+  if (!url || url.hash !== '' || uri.includes('#') || url.username !== '' || url.password !== '') {
     return false;
+  }
   if (url.protocol === 'https:') return true;
-  return url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname);
+  if (url.protocol === 'http:') return LOOPBACK_HOSTS.has(url.hostname);
+  return isPrivateUseRedirect(url);
 }
 
 /** Exact match, except any port on a registered loopback http redirect. */
@@ -138,7 +173,7 @@ export function registerClient(
     if (typeof uri !== 'string' || !isAllowedRedirectUri(uri)) {
       throw new ClientError(
         'invalid_redirect_uri',
-        'Each redirect URI must be https, or http on 127.0.0.1, [::1] or localhost, without a fragment.',
+        'Each redirect URI must be https, http on 127.0.0.1, [::1] or localhost, or a native app scheme (such as cursor://), without a fragment.',
       );
     }
   }
@@ -215,9 +250,11 @@ export async function resolveClient(
   try {
     doc = await documents.resolve(clientId);
   } catch (error) {
+    // One message for every failure: the details (DNS answers, statuses) stay in the logs.
     throw new ClientError(
       'invalid_client',
-      `Could not load the client's metadata document: ${(error as Error).message}`,
+      "Could not load the client's metadata document.",
+      error,
     );
   }
   if (doc.token_endpoint_auth_method !== undefined && doc.token_endpoint_auth_method !== 'none') {

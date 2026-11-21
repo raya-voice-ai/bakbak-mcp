@@ -4,8 +4,8 @@
  * resource they are for and an expiry. Nothing is stored server-side.
  *
  * Codes are single-use per instance (an in-memory set of redeemed codes
- * until they expire); across instances PKCE still ties a code to the client
- * that started the flow.
+ * until they expire), and are marked used only once fully validated; across
+ * instances PKCE still ties a code to the client that started the flow.
  */
 
 import { createHash, randomBytes } from 'node:crypto';
@@ -20,9 +20,18 @@ export interface CodeGrant {
   apiKey: string;
   clientHash: string;
   redirectUri: string;
+  /** Whether the authorization request carried redirect_uri explicitly. */
+  redirectPresented: boolean;
   codeChallenge: string;
   resource: string;
   scope: string | undefined;
+}
+
+/** A code opened at the token endpoint, not yet marked used. */
+export interface OpenedCode extends CodeGrant {
+  jti: string;
+  /** Expiry, seconds since the epoch. */
+  exp: number;
 }
 
 export interface TokenGrant {
@@ -77,6 +86,7 @@ export class TokenIssuer {
       c: grant.clientHash,
       ru: grant.redirectUri,
       cc: grant.codeChallenge,
+      ...(grant.redirectPresented && { rp: 1 }),
       res: grant.resource,
       ...(grant.scope !== undefined && { s: grant.scope }),
       jti: randomBytes(12).toString('base64url'),
@@ -84,8 +94,8 @@ export class TokenIssuer {
     });
   }
 
-  /** Opens a code and marks it redeemed. Undefined if invalid, expired or already used here. */
-  redeemCode(code: string): CodeGrant | undefined {
+  /** Opens a code without using it up. Undefined if invalid, expired or already used here. */
+  openCode(code: string): OpenedCode | undefined {
     const data = this.sealer.open('code', code);
     const exp = data?.exp;
     const jti = str(data?.jti);
@@ -93,14 +103,30 @@ export class TokenIssuer {
     if (!data || typeof exp !== 'number' || exp <= now || !jti) return undefined;
     this.forgetExpired(now);
     if (this.redeemed.has(jti)) return undefined;
-    this.redeemed.set(jti, exp);
     const apiKey = str(data.k);
     const clientHash = str(data.c);
     const redirectUri = str(data.ru);
     const codeChallenge = str(data.cc);
     const resource = str(data.res);
     if (!apiKey || !clientHash || !redirectUri || !codeChallenge || !resource) return undefined;
-    return { apiKey, clientHash, redirectUri, codeChallenge, resource, scope: str(data.s) };
+    return {
+      apiKey,
+      clientHash,
+      redirectUri,
+      redirectPresented: data.rp === 1,
+      codeChallenge,
+      resource,
+      scope: str(data.s),
+      jti,
+      exp,
+    };
+  }
+
+  /** Marks a fully validated code used. False if it already was (a replay). */
+  markRedeemed(code: OpenedCode): boolean {
+    if (this.redeemed.has(code.jti)) return false;
+    this.redeemed.set(code.jti, code.exp);
+    return true;
   }
 
   private forgetExpired(now: number): void {

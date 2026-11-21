@@ -20,25 +20,38 @@ const grant = {
   apiKey: 'bk_live_secret',
   clientHash: 'c'.repeat(22),
   redirectUri: 'https://claude.ai/api/mcp/auth_callback',
+  redirectPresented: true,
   codeChallenge: pkceChallenge('v'.repeat(43)),
   resource: 'https://mcp.example/mcp',
   scope: undefined,
 };
 
 describe('TokenIssuer', () => {
-  it('redeems a code once', () => {
+  it('opens a code without using it up, and redeems it once', () => {
     const { tokens } = issuer();
     const code = tokens.issueCode(grant);
     expect(code).not.toContain(grant.apiKey);
-    expect(tokens.redeemCode(code)).toEqual(grant);
-    expect(tokens.redeemCode(code)).toBeUndefined();
+    const opened = tokens.openCode(code)!;
+    expect(opened).toMatchObject(grant);
+    // Opening again (e.g. after a failed verifier) still works until it is marked used.
+    expect(tokens.openCode(code)).toMatchObject(grant);
+    expect(tokens.markRedeemed(opened)).toBe(true);
+    expect(tokens.markRedeemed(opened)).toBe(false);
+    expect(tokens.openCode(code)).toBeUndefined();
   });
 
   it('expires codes after 60 s', () => {
     const { tokens, clock } = issuer();
     const code = tokens.issueCode(grant);
     clock.now += CODE_TTL_S;
-    expect(tokens.redeemCode(code)).toBeUndefined();
+    expect(tokens.openCode(code)).toBeUndefined();
+  });
+
+  it('remembers whether redirect_uri was sent', () => {
+    const { tokens } = issuer();
+    expect(
+      tokens.openCode(tokens.issueCode({ ...grant, redirectPresented: false }))?.redirectPresented,
+    ).toBe(false);
   });
 
   it('issues access tokens for an hour and refresh tokens for 30 days', () => {

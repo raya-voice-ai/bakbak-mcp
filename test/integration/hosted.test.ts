@@ -24,6 +24,12 @@ let base: string;
 beforeAll(async () => {
   api = await startMockApi();
   hosted = await startHosted(api.baseURL, {
+    // Generous per-address limits: every request here comes from one address.
+    // The production limits are tested in abuse.test.ts.
+    limits: {
+      authorizePost: { burst: 100, perMinute: 100 },
+      keyChecks: { burst: 100, perMinute: 100 },
+    },
     documents: (url) =>
       url.href === CLAUDE_CIMD
         ? Promise.resolve({
@@ -110,7 +116,7 @@ async function authorize(
   });
   expect(submitted.status).toBe(302);
   const location = new URL(submitted.headers.get('location')!);
-  expect(location.origin + location.pathname).toBe(options.redirectUri ?? CLAUDE_CALLBACK);
+  expect(location.href.split('?')[0]).toBe(options.redirectUri ?? CLAUDE_CALLBACK);
   expect(location.searchParams.get('state')).toBe(state);
   return {
     code: location.searchParams.get('code')!,
@@ -242,6 +248,7 @@ describe('claude.ai connector flow', () => {
       expect(tools.map((t) => t.name).sort()).toEqual(['list_voices', 'text_to_speech']);
       const tts = tools.find((t) => t.name === 'text_to_speech')!;
       expect(Object.keys(tts.inputSchema.properties ?? {})).not.toContain('output_path');
+      expect(tts.annotations?.destructiveHint).toBe(false);
       const result = await client.callTool({
         name: 'text_to_speech',
         arguments: { text: 'नमस्ते', language: 'hi' },
@@ -376,22 +383,105 @@ describe('claude.ai connector flow', () => {
     expect(await res.json()).toMatchObject({ error: 'invalid_grant' });
   });
 
-  it('requires PKCE S256 and the right resource', async () => {
-    const plain = await fetch(
-      `${base}/authorize?${new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: CLAUDE_CALLBACK, code_challenge: 'x'.repeat(43), code_challenge_method: 'plain', state: 's1' }).toString()}`,
-      { redirect: 'manual' },
+  it('never redirects before the person acts on the consent page (no open redirect)', async () => {
+    const evil = await register(['https://evil.example/landing']);
+    const good = {
+      response_type: 'code',
+      client_id: evil,
+      redirect_uri: 'https://evil.example/landing',
+      code_challenge: pkce().challenge,
+      code_challenge_method: 'S256',
+      state: 's1',
+    };
+    const bads: Record<string, string>[] = [
+      { response_type: 'token' },
+      { code_challenge_method: 'plain' },
+      { code_challenge: 'short' },
+      { resource: 'https://other.example/mcp' },
+      { state: 'x'.repeat(5000) },
+    ];
+    for (const bad of bads) {
+      const res = await fetch(
+        `${base}/authorize?${new URLSearchParams({ ...good, ...bad }).toString()}`,
+        { redirect: 'manual' },
+      );
+      expect(res.status, JSON.stringify(bad)).toBe(400);
+      expect(res.headers.get('location')).toBeNull();
+      expect(await res.text()).toContain('This connection request is invalid');
+    }
+  });
+
+  it('does not use up a code on a failed exchange, and refuses a replay', async () => {
+    const auth = await authorize(clientId);
+    const wrong = await exchange(clientId, auth, { code_verifier: pkce().verifier });
+    expect(wrong.status).toBe(400);
+    expect((await exchange(clientId, auth)).status).toBe(200);
+    const replay = await exchange(clientId, auth);
+    expect(replay.status).toBe(400);
+    expect(await replay.json()).toMatchObject({ error: 'invalid_grant' });
+  });
+
+  it('requires redirect_uri at /token exactly when /authorize had it', async () => {
+    const single = await register(['https://one.example/cb']);
+    const { verifier, challenge } = pkce();
+    const page = await fetch(
+      `${base}/authorize?${new URLSearchParams({ response_type: 'code', client_id: single, code_challenge: challenge, code_challenge_method: 'S256' }).toString()}`,
     );
-    expect(plain.status).toBe(302);
-    const location = new URL(plain.headers.get('location')!);
-    expect(location.searchParams.get('error')).toBe('invalid_request');
-    expect(location.searchParams.get('state')).toBe('s1');
-    const wrongResource = await fetch(
-      `${base}/authorize?${new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: CLAUDE_CALLBACK, code_challenge: pkce().challenge, code_challenge_method: 'S256', resource: 'https://other.example/mcp' }).toString()}`,
-      { redirect: 'manual' },
+    const html = await page.text();
+    const submitted = await fetch(`${base}/authorize`, {
+      ...form({
+        request: /name="request" value="([^"]+)"/.exec(html)![1]!,
+        csrf_token: /name="csrf_token" value="([^"]+)"/.exec(html)![1]!,
+        api_key: TEST_KEY,
+        action: 'connect',
+      }),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: page.headers.get('set-cookie')!.split(';')[0]!,
+      },
+      redirect: 'manual',
+    });
+    const code = new URL(submitted.headers.get('location')!).searchParams.get('code')!;
+    const res = await fetch(
+      `${base}/token`,
+      form({ grant_type: 'authorization_code', code, client_id: single, code_verifier: verifier }),
     );
-    expect(new URL(wrongResource.headers.get('location')!).searchParams.get('error')).toBe(
-      'invalid_target',
+    expect(res.status).toBe(200);
+
+    // When /authorize had redirect_uri, /token must repeat it.
+    const auth = await authorize(clientId);
+    const missing = await fetch(
+      `${base}/token`,
+      form({
+        grant_type: 'authorization_code',
+        code: auth.code,
+        client_id: clientId,
+        code_verifier: auth.verifier,
+      }),
     );
+    expect(missing.status).toBe(400);
+  });
+
+  it("connects a native app through its own URI scheme (Cursor's OAuth)", async () => {
+    const callback = 'cursor://anysphere.cursor-mcp/oauth/callback';
+    const native = await register([callback]);
+    const page = await fetch(
+      `${base}/authorize?${new URLSearchParams({ response_type: 'code', client_id: native, redirect_uri: callback, code_challenge: pkce().challenge, code_challenge_method: 'S256' }).toString()}`,
+    );
+    expect(page.headers.get('content-security-policy')).toMatch(/form-action 'self' cursor:;/);
+    expect(await page.text()).toContain('cursor://anysphere.cursor-mcp');
+    const auth = await authorize(native, { redirectUri: callback });
+    const res = await exchange(native, auth, { redirect_uri: callback });
+    expect(res.status).toBe(200);
+    expect(
+      (
+        await fetch(`${base}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ redirect_uris: ['javascript:alert(1)'] }),
+        })
+      ).status,
+    ).toBe(400);
   });
 
   it('shows the form again when the key is wrong, and refuses a forged form', async () => {

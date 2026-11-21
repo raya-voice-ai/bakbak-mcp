@@ -1,0 +1,698 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`tool schemas > hosted mode matches the snapshot 1`] = `
+[
+  {
+    "_meta": undefined,
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Text to speech",
+    },
+    "description": "Convert text to natural speech with Bakbak and return a download link for the audio (valid for one hour). Uses Bakbak credits for every character, so call it once per text and do not retry a success. Pick a voice for the language with list_voices first and pass its id as voice_id and its model as model (a voice works only with its own model). Hindi text must be in Devanagari script. Text up to 50,000 characters; long text is split at sentence boundaries and joined into one file.",
+    "execution": undefined,
+    "icons": undefined,
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "include_audio": {
+          "default": false,
+          "description": "Also return the audio inline as an audio content block. Only for audio up to 1 MB (about 20 s of the default WAV).",
+          "type": "boolean",
+        },
+        "language": {
+          "anyOf": [
+            {
+              "enum": [
+                "hi",
+                "mr",
+                "te",
+                "kn",
+                "bn",
+                "as",
+                "gu",
+                "ne",
+                "ml",
+                "ta",
+                "pa",
+                "en",
+                "en-in",
+                "en-us",
+              ],
+              "type": "string",
+            },
+            {
+              "minLength": 1,
+              "type": "string",
+            },
+          ],
+          "description": "Language of the text: hi, mr, te, kn, bn, as, gu, ne, ml, ta, pa, en, en-in or en-us. m1 voices use en.",
+        },
+        "model": {
+          "anyOf": [
+            {
+              "enum": [
+                "standard",
+                "m1",
+              ],
+              "type": "string",
+            },
+            {
+              "minLength": 1,
+              "type": "string",
+            },
+          ],
+          "description": "standard or m1. Must be the voice's model; if omitted, the chosen voice's own model is used.",
+        },
+        "output_format": {
+          "additionalProperties": false,
+          "description": "The API output_format object. Default {"container":"wav","encoding":"pcm_s16le","sample_rate":24000}.",
+          "properties": {
+            "container": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "wav",
+                    "mp3",
+                    "raw",
+                  ],
+                  "type": "string",
+                },
+                {
+                  "minLength": 1,
+                  "type": "string",
+                },
+              ],
+              "description": "wav (default), mp3, or raw (headerless samples).",
+            },
+            "encoding": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pcm_s16le",
+                    "pcm_f32le",
+                    "pcm_mulaw",
+                    "pcm_alaw",
+                  ],
+                  "type": "string",
+                },
+                {
+                  "minLength": 1,
+                  "type": "string",
+                },
+              ],
+              "description": "Sample encoding. Required for wav and raw; omit for mp3.",
+            },
+            "sample_rate": {
+              "description": "Samples per second: 8000, 16000, 22050 or 24000 (the default).",
+              "type": "number",
+            },
+          },
+          "required": [
+            "container",
+          ],
+          "type": "object",
+        },
+        "speed": {
+          "description": "Speaking rate from 0.5 to 1.5 (default 1.0).",
+          "type": "number",
+        },
+        "text": {
+          "description": "The text to speak, up to 50,000 characters. Hindi must be in Devanagari script; Indian names in English text are best written in Devanagari.",
+          "maxLength": 50000,
+          "minLength": 1,
+          "type": "string",
+        },
+        "voice_id": {
+          "description": "A voice id from list_voices. If omitted, the first voice for the language (and model, if given) is used.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "text",
+        "language",
+      ],
+      "type": "object",
+    },
+    "name": "text_to_speech",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "audio_url": {
+          "description": "Download link for the audio. Private; anyone with the link can download it until it expires.",
+          "type": "string",
+        },
+        "characters": {
+          "description": "Characters of text synthesized (code points).",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "duration_seconds": {
+          "description": "Length of the audio in seconds.",
+          "type": "number",
+        },
+        "expires_at": {
+          "description": "When the link stops working (ISO 8601, UTC).",
+          "type": "string",
+        },
+        "format": {
+          "additionalProperties": false,
+          "properties": {
+            "container": {
+              "type": "string",
+            },
+            "encoding": {
+              "type": "string",
+            },
+            "mime_type": {
+              "type": "string",
+            },
+            "sample_rate": {
+              "type": "number",
+            },
+          },
+          "required": [
+            "container",
+            "mime_type",
+          ],
+          "type": "object",
+        },
+        "language": {
+          "type": "string",
+        },
+        "model": {
+          "type": "string",
+        },
+        "request_ids": {
+          "description": "Bakbak request ids, for support.",
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "voice_id": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "audio_url",
+        "expires_at",
+        "format",
+        "duration_seconds",
+        "characters",
+        "voice_id",
+        "model",
+        "language",
+        "request_ids",
+      ],
+      "type": "object",
+    },
+    "title": "Text to speech",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "List voices",
+    },
+    "description": "List Bakbak voices, optionally filtered by language, model and a name substring. Free: uses no credits. Each voice has an id (pass it to text_to_speech as voice_id), a name, a language and a model (pass it as model).",
+    "execution": undefined,
+    "icons": undefined,
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "anyOf": [
+            {
+              "enum": [
+                "hi",
+                "mr",
+                "te",
+                "kn",
+                "bn",
+                "as",
+                "gu",
+                "ne",
+                "ml",
+                "ta",
+                "pa",
+                "en",
+                "en-in",
+                "en-us",
+              ],
+              "type": "string",
+            },
+            {
+              "minLength": 1,
+              "type": "string",
+            },
+          ],
+          "description": "Only voices for this language, e.g. hi.",
+        },
+        "limit": {
+          "default": 50,
+          "description": "Maximum number of voices to return (default 50).",
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "model": {
+          "anyOf": [
+            {
+              "enum": [
+                "standard",
+                "m1",
+              ],
+              "type": "string",
+            },
+            {
+              "minLength": 1,
+              "type": "string",
+            },
+          ],
+          "description": "Only voices of this model: standard or m1.",
+        },
+        "query": {
+          "description": "Only voices whose name contains this text (case-insensitive).",
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "list_voices",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "description": "Voices returned.",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "total": {
+          "description": "Voices matching the filters, before the limit.",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "voices": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+              },
+              "language": {
+                "type": "string",
+              },
+              "model": {
+                "type": "string",
+              },
+              "name": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "id",
+              "name",
+              "language",
+              "model",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "voices",
+        "count",
+        "total",
+      ],
+      "type": "object",
+    },
+    "title": "List voices",
+  },
+]
+`;
+
+exports[`tool schemas > local mode matches the snapshot 1`] = `
+[
+  {
+    "_meta": undefined,
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Text to speech",
+    },
+    "description": "Convert text to natural speech with Bakbak and save it as an audio file on this computer. Uses Bakbak credits for every character, so call it once per text and do not retry a success. Pick a voice for the language with list_voices first and pass its id as voice_id and its model as model (a voice works only with its own model). Hindi text must be in Devanagari script. Text up to 50,000 characters; long text is split at sentence boundaries and joined into one file.",
+    "execution": undefined,
+    "icons": undefined,
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "include_audio": {
+          "default": false,
+          "description": "Also return the audio inline as an audio content block. Only for audio up to 1 MB (about 20 s of the default WAV).",
+          "type": "boolean",
+        },
+        "language": {
+          "anyOf": [
+            {
+              "enum": [
+                "hi",
+                "mr",
+                "te",
+                "kn",
+                "bn",
+                "as",
+                "gu",
+                "ne",
+                "ml",
+                "ta",
+                "pa",
+                "en",
+                "en-in",
+                "en-us",
+              ],
+              "type": "string",
+            },
+            {
+              "minLength": 1,
+              "type": "string",
+            },
+          ],
+          "description": "Language of the text: hi, mr, te, kn, bn, as, gu, ne, ml, ta, pa, en, en-in or en-us. m1 voices use en.",
+        },
+        "model": {
+          "anyOf": [
+            {
+              "enum": [
+                "standard",
+                "m1",
+              ],
+              "type": "string",
+            },
+            {
+              "minLength": 1,
+              "type": "string",
+            },
+          ],
+          "description": "standard or m1. Must be the voice's model; if omitted, the chosen voice's own model is used.",
+        },
+        "output_format": {
+          "additionalProperties": false,
+          "description": "The API output_format object. Default {"container":"wav","encoding":"pcm_s16le","sample_rate":24000}.",
+          "properties": {
+            "container": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "wav",
+                    "mp3",
+                    "raw",
+                  ],
+                  "type": "string",
+                },
+                {
+                  "minLength": 1,
+                  "type": "string",
+                },
+              ],
+              "description": "wav (default), mp3, or raw (headerless samples).",
+            },
+            "encoding": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pcm_s16le",
+                    "pcm_f32le",
+                    "pcm_mulaw",
+                    "pcm_alaw",
+                  ],
+                  "type": "string",
+                },
+                {
+                  "minLength": 1,
+                  "type": "string",
+                },
+              ],
+              "description": "Sample encoding. Required for wav and raw; omit for mp3.",
+            },
+            "sample_rate": {
+              "description": "Samples per second: 8000, 16000, 22050 or 24000 (the default).",
+              "type": "number",
+            },
+          },
+          "required": [
+            "container",
+          ],
+          "type": "object",
+        },
+        "output_path": {
+          "description": "Where to save the file: an absolute path, or a path relative to the output directory. Its directory must exist and its extension must match the format. Default: a new file in the output directory.",
+          "minLength": 1,
+          "type": "string",
+        },
+        "overwrite": {
+          "default": false,
+          "description": "Replace output_path if it already exists. Without it, an existing file is never touched.",
+          "type": "boolean",
+        },
+        "speed": {
+          "description": "Speaking rate from 0.5 to 1.5 (default 1.0).",
+          "type": "number",
+        },
+        "text": {
+          "description": "The text to speak, up to 50,000 characters. Hindi must be in Devanagari script; Indian names in English text are best written in Devanagari.",
+          "maxLength": 50000,
+          "minLength": 1,
+          "type": "string",
+        },
+        "voice_id": {
+          "description": "A voice id from list_voices. If omitted, the first voice for the language (and model, if given) is used.",
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "text",
+        "language",
+      ],
+      "type": "object",
+    },
+    "name": "text_to_speech",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "characters": {
+          "description": "Characters of text synthesized (code points).",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "duration_seconds": {
+          "description": "Length of the audio in seconds.",
+          "type": "number",
+        },
+        "file_path": {
+          "description": "Absolute path of the saved audio file.",
+          "type": "string",
+        },
+        "format": {
+          "additionalProperties": false,
+          "properties": {
+            "container": {
+              "type": "string",
+            },
+            "encoding": {
+              "type": "string",
+            },
+            "mime_type": {
+              "type": "string",
+            },
+            "sample_rate": {
+              "type": "number",
+            },
+          },
+          "required": [
+            "container",
+            "mime_type",
+          ],
+          "type": "object",
+        },
+        "language": {
+          "type": "string",
+        },
+        "model": {
+          "type": "string",
+        },
+        "request_ids": {
+          "description": "Bakbak request ids, for support.",
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "voice_id": {
+          "type": "string",
+        },
+      },
+      "required": [
+        "file_path",
+        "format",
+        "duration_seconds",
+        "characters",
+        "voice_id",
+        "model",
+        "language",
+        "request_ids",
+      ],
+      "type": "object",
+    },
+    "title": "Text to speech",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true,
+      "title": "List voices",
+    },
+    "description": "List Bakbak voices, optionally filtered by language, model and a name substring. Free: uses no credits. Each voice has an id (pass it to text_to_speech as voice_id), a name, a language and a model (pass it as model).",
+    "execution": undefined,
+    "icons": undefined,
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "anyOf": [
+            {
+              "enum": [
+                "hi",
+                "mr",
+                "te",
+                "kn",
+                "bn",
+                "as",
+                "gu",
+                "ne",
+                "ml",
+                "ta",
+                "pa",
+                "en",
+                "en-in",
+                "en-us",
+              ],
+              "type": "string",
+            },
+            {
+              "minLength": 1,
+              "type": "string",
+            },
+          ],
+          "description": "Only voices for this language, e.g. hi.",
+        },
+        "limit": {
+          "default": 50,
+          "description": "Maximum number of voices to return (default 50).",
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "model": {
+          "anyOf": [
+            {
+              "enum": [
+                "standard",
+                "m1",
+              ],
+              "type": "string",
+            },
+            {
+              "minLength": 1,
+              "type": "string",
+            },
+          ],
+          "description": "Only voices of this model: standard or m1.",
+        },
+        "query": {
+          "description": "Only voices whose name contains this text (case-insensitive).",
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "list_voices",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "description": "Voices returned.",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "total": {
+          "description": "Voices matching the filters, before the limit.",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "voices": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+              },
+              "language": {
+                "type": "string",
+              },
+              "model": {
+                "type": "string",
+              },
+              "name": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "id",
+              "name",
+              "language",
+              "model",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "voices",
+        "count",
+        "total",
+      ],
+      "type": "object",
+    },
+    "title": "List voices",
+  },
+]
+`;

@@ -16,16 +16,16 @@ import {
 
 describe('output directory', () => {
   it('uses ~/Documents/Bakbak when ~/Documents exists, else ~/Bakbak', () => {
-    expect(defaultOutputDir('/home/u', () => true)).toBe(
-      path.join('/home/u', 'Documents', 'Bakbak'),
+    expect(defaultOutputDir('/users/alex', () => true)).toBe(
+      path.join('/users/alex', 'Documents', 'Bakbak'),
     );
-    expect(defaultOutputDir('/home/u', () => false)).toBe(path.join('/home/u', 'Bakbak'));
+    expect(defaultOutputDir('/users/alex', () => false)).toBe(path.join('/users/alex', 'Bakbak'));
   });
 
   it('expands ~ and makes BAKBAK_MCP_OUTPUT_DIR absolute', () => {
-    expect(resolveOutputDir('~/audio', '/home/u')).toBe(path.join('/home/u', 'audio'));
-    expect(resolveOutputDir('/srv/out', '/home/u')).toBe('/srv/out');
-    expect(path.isAbsolute(resolveOutputDir('rel/dir', '/home/u'))).toBe(true);
+    expect(resolveOutputDir('~/audio', '/users/alex')).toBe(path.join('/users/alex', 'audio'));
+    expect(resolveOutputDir('/srv/out', '/users/alex')).toBe('/srv/out');
+    expect(path.isAbsolute(resolveOutputDir('rel/dir', '/users/alex'))).toBe(true);
   });
 });
 
@@ -154,7 +154,7 @@ describe('environment values', () => {
     expect(envValue(undefined)).toBeUndefined();
     expect(envValue('  ')).toBeUndefined();
     expect(envValue('${user_config.output_dir}')).toBeUndefined();
-    expect(envValue(' /tmp/x ')).toBe('/tmp/x');
+    expect(envValue(' /srv/x ')).toBe('/srv/x');
     expect(envValue('key-with-${dollar}')).toBe('key-with-${dollar}');
   });
 });

@@ -44,6 +44,11 @@ export const outputFormatSchema = z
       .optional()
       .describe('Samples per second: 8000, 16000, 22050 or 24000 (the default).'),
   })
+  .refine((f) => !((f.container === 'wav' || f.container === 'raw') && f.encoding === undefined), {
+    message:
+      'output_format.encoding is required for wav and raw: pcm_s16le, pcm_f32le, pcm_mulaw or pcm_alaw',
+    path: ['encoding'],
+  })
   .describe(
     'The API output_format object. Default {"container":"wav","encoding":"pcm_s16le","sample_rate":24000}.',
   );

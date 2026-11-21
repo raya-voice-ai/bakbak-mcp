@@ -7,6 +7,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 
 import { serverInstructions } from './instructions.js';
 import type { ToolEnv } from './tools/env.js';
+import type { ServerMode } from './tools/errors.js';
 import { LIST_VOICES_DESCRIPTION, listVoices } from './tools/listVoices.js';
 import {
   hostedTtsInput,
@@ -21,13 +22,16 @@ import { PACKAGE_NAME, VERSION } from './version.js';
 
 export const TOOL_NAMES = ['text_to_speech', 'list_voices'] as const;
 
-const TTS_ANNOTATIONS = {
-  title: 'Text to speech',
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: false,
-  openWorldHint: true,
-};
+/** Local mode can replace an existing file (`overwrite`), so it is destructive there. */
+function ttsAnnotations(mode: ServerMode) {
+  return {
+    title: 'Text to speech',
+    readOnlyHint: false,
+    destructiveHint: mode === 'local',
+    idempotentHint: false,
+    openWorldHint: true,
+  };
+}
 
 const VOICES_ANNOTATIONS = {
   title: 'List voices',
@@ -52,11 +56,11 @@ export function createBakbakServer(env: ToolEnv): McpServer {
     server.registerTool(
       'text_to_speech',
       {
-        title: TTS_ANNOTATIONS.title,
+        title: 'Text to speech',
         description: textToSpeechDescription(env.mode),
         inputSchema: localTtsInput,
         outputSchema: localTtsOutput,
-        annotations: TTS_ANNOTATIONS,
+        annotations: ttsAnnotations(env.mode),
       },
       (args, ctx) => textToSpeech(args, env, ctx),
     );
@@ -64,11 +68,11 @@ export function createBakbakServer(env: ToolEnv): McpServer {
     server.registerTool(
       'text_to_speech',
       {
-        title: TTS_ANNOTATIONS.title,
+        title: 'Text to speech',
         description: textToSpeechDescription(env.mode),
         inputSchema: hostedTtsInput,
         outputSchema: hostedTtsOutput,
-        annotations: TTS_ANNOTATIONS,
+        annotations: ttsAnnotations(env.mode),
       },
       (args, ctx) => textToSpeech(args, env, ctx),
     );

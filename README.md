@@ -15,7 +15,8 @@ It runs two ways:
   key as a header.
 
 Both offer the same two tools: [`text_to_speech`](#text_to_speech) and
-[`list_voices`](#list_voices).
+[`list_voices`](#list_voices). Full documentation:
+<https://docs.litwizlabs.com/documentation/tts-mcp>.
 
 **Contents:** [Get an API key](#get-an-api-key) · [Set up your client](#set-up-your-client) ·
 [Tools](#tools) · [Example prompts](#example-prompts) · [Configuration](#configuration) ·
@@ -290,7 +291,8 @@ read it and act. The first text block is a sentence plus one next step; the seco
 }
 ```
 
-`message`, `error_code` and `request_id` come from the API unchanged. Invalid arguments
+`message`, `error_code` and `request_id` come from the API unchanged; every `error_code` is
+described at <https://docs.litwizlabs.com/documentation/tts-errors>. Invalid arguments
 (including an unknown parameter) are reported the same way. A missing key names
 `BAKBAK_API_KEY` and the dashboard. In hosted mode, a request without valid credentials gets
 HTTP 401 with `WWW-Authenticate: Bearer resource_metadata="…"`, which starts the client's

@@ -16,7 +16,7 @@
     "url": "https://github.com/raya-voice-ai/bakbak-mcp"
   },
   "homepage": "https://github.com/raya-voice-ai/bakbak-mcp#readme",
-  "documentation": "https://github.com/raya-voice-ai/bakbak-mcp#readme",
+  "documentation": "https://docs.litwizlabs.com/documentation/tts-mcp",
   "support": "https://github.com/raya-voice-ai/bakbak-mcp/issues",
   "icon": "icon.png",
   "server": {

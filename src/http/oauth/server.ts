@@ -112,7 +112,7 @@ export class OAuthServer {
       authorization_servers: [this.options.publicUrl],
       bearer_methods_supported: ['header'],
       resource_name: 'Bakbak text-to-speech',
-      resource_documentation: 'https://github.com/raya-voice-ai/bakbak-mcp#readme',
+      resource_documentation: 'https://docs.litwizlabs.com/documentation/tts-mcp',
     };
   }
 
@@ -131,7 +131,7 @@ export class OAuthServer {
       token_endpoint_auth_methods_supported: SUPPORTED_AUTH_METHODS,
       client_id_metadata_document_supported: true,
       authorization_response_iss_parameter_supported: true,
-      service_documentation: 'https://github.com/raya-voice-ai/bakbak-mcp#readme',
+      service_documentation: 'https://docs.litwizlabs.com/documentation/tts-mcp',
     };
   }
 

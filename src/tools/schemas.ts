@@ -60,7 +60,7 @@ const ttsBase = {
       'The text to speak, up to 50,000 characters. Hindi must be in Devanagari script; Indian names in English text are best written in Devanagari.',
     ),
   language: language.describe(
-    'Language of the text: hi, mr, te, kn, bn, as, gu, ne, ml, ta, pa, en, en-in or en-us. m1 voices use en.',
+    'Language of the text: hi, mr, te, kn, bn, as, gu, ne, ml, ta, pa, en, en-in or en-us. English m1 voices use en; standard English voices use en-in or en-us.',
   ),
   voice_id: z
     .string()

@@ -2,7 +2,7 @@
 
 The official [Model Context Protocol](https://modelcontextprotocol.io) server for
 [Bakbak](https://bakbak.getraya.app), the text-to-speech API by Raya. It lets Claude, Cursor,
-VS Code, Windsurf and any other MCP client speak text in Hindi, 12 more Indian languages and
+VS Code, Windsurf and any other MCP client speak text in Hindi, other Indian languages and
 English:
 
 > "Read this paragraph aloud in Hindi with a calm female voice and save it as an MP3."
@@ -176,17 +176,17 @@ Parameter names are the Bakbak API's own (`voice_id`, `output_format`, …), so 
 
 Converts text to speech and saves it (local) or returns a link (hosted). Uses credits.
 
-| Parameter       | Type    | Default                                                          | Description                                                                                                                                                                               |
-| --------------- | ------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `text`          | string  | required                                                         | The text, up to 50,000 characters. Hindi must be in Devanagari script.                                                                                                                    |
-| `language`      | string  | required                                                         | `hi`, `mr`, `te`, `kn`, `bn`, `as`, `gu`, `ne`, `ml`, `ta`, `pa`, `en`, `en-in` or `en-us` (and any language the API adds). m1 voices use `en`.                                           |
-| `voice_id`      | string  | first voice for the language                                     | A voice id from `list_voices`.                                                                                                                                                            |
-| `model`         | string  | the voice's model                                                | `standard` or `m1`. Must be the voice's own model.                                                                                                                                        |
-| `speed`         | number  | `1.0`                                                            | Speaking rate, 0.5 to 1.5.                                                                                                                                                                |
-| `output_format` | object  | `{"container":"wav","encoding":"pcm_s16le","sample_rate":24000}` | `container` `wav`, `mp3` or `raw`; `encoding` `pcm_s16le`, `pcm_f32le`, `pcm_mulaw` or `pcm_alaw` (required for wav and raw, omitted for mp3); `sample_rate` 8000, 16000, 22050 or 24000. |
-| `output_path`   | string  | a new file                                                       | Local mode only. An absolute path, or one relative to the output directory (and inside it). Its directory must exist and its extension must match the format.                             |
-| `overwrite`     | boolean | `false`                                                          | Local mode only. Replace `output_path` if it exists; otherwise an existing file is never touched.                                                                                         |
-| `include_audio` | boolean | `false`                                                          | Also return the audio inline as an MCP audio block, for audio up to 1 MB (about 20 s of the default WAV). Larger audio is still saved, and the call explains the limit.                   |
+| Parameter       | Type    | Default                                                          | Description                                                                                                                                                                                             |
+| --------------- | ------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `text`          | string  | required                                                         | The text, up to 50,000 characters. Hindi must be in Devanagari script.                                                                                                                                  |
+| `language`      | string  | required                                                         | `hi`, `mr`, `te`, `kn`, `bn`, `as`, `gu`, `ne`, `ml`, `ta`, `pa`, `en`, `en-in` or `en-us` (and any language the API adds). English m1 voices use `en`; standard English voices use `en-in` or `en-us`. |
+| `voice_id`      | string  | first voice for the language                                     | A voice id from `list_voices`.                                                                                                                                                                          |
+| `model`         | string  | the voice's model                                                | `standard` or `m1`. Must be the voice's own model.                                                                                                                                                      |
+| `speed`         | number  | `1.0`                                                            | Speaking rate, 0.5 to 1.5.                                                                                                                                                                              |
+| `output_format` | object  | `{"container":"wav","encoding":"pcm_s16le","sample_rate":24000}` | `container` `wav`, `mp3` or `raw`; `encoding` `pcm_s16le`, `pcm_f32le`, `pcm_mulaw` or `pcm_alaw` (required for wav and raw, omitted for mp3); `sample_rate` 8000, 16000, 22050 or 24000.               |
+| `output_path`   | string  | a new file                                                       | Local mode only. An absolute path, or one relative to the output directory (and inside it). Its directory must exist and its extension must match the format.                                           |
+| `overwrite`     | boolean | `false`                                                          | Local mode only. Replace `output_path` if it exists; otherwise an existing file is never touched.                                                                                                       |
+| `include_audio` | boolean | `false`                                                          | Also return the audio inline as an MCP audio block, for audio up to 1 MB (about 20 s of the default WAV). Larger audio is still saved, and the call explains the limit.                                 |
 
 It returns `structuredContent` (and the same JSON as text, after a one-line summary):
 

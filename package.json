@@ -1,7 +1,7 @@
 {
   "name": "bakbak-mcp",
   "version": "1.0.0-rc.1",
-  "description": "Official MCP server for the Bakbak text-to-speech API: generate speech in 13 Indian and English languages from Claude, Cursor, VS Code and other MCP clients.",
+  "description": "Official MCP server for the Bakbak text-to-speech API: speech in Hindi, other Indian languages and English from Claude, Cursor, VS Code and other MCP clients.",
   "mcpName": "io.github.raya-voice-ai/bakbak-mcp",
   "license": "Apache-2.0",
   "author": "Raya Voice AI <support@getraya.app>",

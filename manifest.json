@@ -4,8 +4,8 @@
   "name": "bakbak-mcp",
   "display_name": "Bakbak",
   "version": "1.0.0-rc.1",
-  "description": "Text to speech in Hindi, 12 more Indian languages and English, saved as audio files on your computer.",
-  "long_description": "The official Bakbak MCP server. Ask Claude to read text aloud in Hindi, Marathi, Telugu, Kannada, Bengali, Assamese, Gujarati, Nepali, Malayalam, Tamil, Punjabi or English, and it saves a WAV or MP3 file in your Documents/Bakbak folder. Choose from Bakbak's voices, change the speed, and synthesize long texts (up to 50,000 characters) into one file. You need a Bakbak API key from https://bakbak.getraya.app; synthesis uses your Bakbak credits.",
+  "description": "Text to speech in Hindi, other Indian languages and English, saved as audio files on your computer.",
+  "long_description": "The official Bakbak MCP server. Ask Claude to read text aloud in Hindi, Marathi, Telugu, Kannada, Bengali, Assamese, Gujarati, Nepali, Malayalam, Tamil or English, and it saves a WAV or MP3 file in your Documents/Bakbak folder. Choose from Bakbak's voices, change the speed, and synthesize long texts (up to 50,000 characters) into one file. You need a Bakbak API key from https://bakbak.getraya.app; synthesis uses your Bakbak credits.",
   "author": {
     "name": "Raya Voice AI",
     "email": "support@getraya.app",

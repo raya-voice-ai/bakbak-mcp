@@ -49,7 +49,7 @@ exports[`tool schemas > hosted mode matches the snapshot 1`] = `
               "type": "string",
             },
           ],
-          "description": "Language of the text: hi, mr, te, kn, bn, as, gu, ne, ml, ta, pa, en, en-in or en-us. m1 voices use en.",
+          "description": "Language of the text: hi, mr, te, kn, bn, as, gu, ne, ml, ta, pa, en, en-in or en-us. English m1 voices use en; standard English voices use en-in or en-us.",
         },
         "model": {
           "anyOf": [
@@ -395,7 +395,7 @@ exports[`tool schemas > local mode matches the snapshot 1`] = `
               "type": "string",
             },
           ],
-          "description": "Language of the text: hi, mr, te, kn, bn, as, gu, ne, ml, ta, pa, en, en-in or en-us. m1 voices use en.",
+          "description": "Language of the text: hi, mr, te, kn, bn, as, gu, ne, ml, ta, pa, en, en-in or en-us. English m1 voices use en; standard English voices use en-in or en-us.",
         },
         "model": {
           "anyOf": [

@@ -29,7 +29,7 @@ import {
   sendJson,
 } from '../io.js';
 import type { RateLimiter } from '../rateLimit.js';
-import type { Sealer } from '../sealer.js';
+import { SEALED_PREFIX, type Sealer } from '../sealer.js';
 import type { ClientMetadataResolver } from './cimd.js';
 import {
   ClientError,
@@ -305,7 +305,7 @@ export class OAuthServer {
       );
       return;
     }
-    if (!clientId.startsWith('bkmc1.')) {
+    if (!clientId.startsWith(`${SEALED_PREFIX.client}.`)) {
       // Resolving a metadata document URL may fetch it: bound how often one address can cause that.
       const wait = this.options.limits.authorizeGet.take(this.options.clientIp(req));
       if (wait !== undefined) {

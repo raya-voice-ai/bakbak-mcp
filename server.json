@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.raya-voice-ai/bakbak-mcp",
   "title": "Bakbak",
-  "description": "Text to speech for Hindi, 12 more Indian languages and English with the Bakbak API.",
+  "description": "Text to speech in Hindi, other Indian languages and English, with the Bakbak API.",
   "repository": {
     "url": "https://github.com/raya-voice-ai/bakbak-mcp",
     "source": "github"

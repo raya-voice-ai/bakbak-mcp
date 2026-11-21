@@ -7,11 +7,11 @@
 //   node scripts/build-mcpb.mjs --no-pack  -> only the mcpb-build/ directory
 
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { bundleServer } from './bundle.mjs';
+import { bundleMcpbServer } from './bundle.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, 'mcpb-build');
@@ -23,14 +23,7 @@ if (manifest.version !== pkg.version) {
 }
 
 await rm(out, { recursive: true, force: true });
-await mkdir(path.join(out, 'server'), { recursive: true });
-
-await bundleServer(path.join(out, 'server', 'index.js'));
-
-await writeFile(
-  path.join(out, 'server', 'package.json'),
-  JSON.stringify({ type: 'module', private: true }, null, 2) + '\n',
-);
+await bundleMcpbServer(path.join(out, 'server'));
 await cp(path.join(root, 'manifest.json'), path.join(out, 'manifest.json'));
 await cp(path.join(root, 'assets', 'icon.png'), path.join(out, 'icon.png'));
 await cp(path.join(root, 'LICENSE'), path.join(out, 'LICENSE'));

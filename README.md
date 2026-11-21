@@ -30,8 +30,9 @@ credits for every character; listing voices is free.
 
 ## Set up your client
 
-Local mode needs [Node.js](https://nodejs.org) 22 or newer (Claude Desktop's one-click
-bundle includes what it needs). Replace `YOUR_BAKBAK_API_KEY` with your key.
+Local mode needs [Node.js](https://nodejs.org) 22 or newer. The Claude Desktop bundle runs on
+the Node.js built into Claude Desktop, so it needs nothing installed. Replace
+`YOUR_BAKBAK_API_KEY` with your key.
 
 ### Claude Desktop
 
@@ -83,9 +84,11 @@ Audio comes back as a private link that works for one hour.
 ### Cursor
 
 [Add Bakbak (local) to Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=bakbak&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImJha2Jhay1tY3AiXSwiZW52Ijp7IkJBS0JBS19BUElfS0VZIjoiWU9VUl9CQUtCQUtfQVBJX0tFWSJ9fQ==)
-· [Add Bakbak (hosted) to Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=bakbak&config=eyJ1cmwiOiJodHRwczovL21jcC5iYWtiYWsuc2kvbWNwIiwiaGVhZGVycyI6eyJBdXRob3JpemF0aW9uIjoiQmVhcmVyIFlPVVJfQkFLQkFLX0FQSV9LRVkifX0=)
+· [Add Bakbak (hosted) to Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=bakbak&config=eyJ1cmwiOiJodHRwczovL21jcC5iYWtiYWsuc2kvbWNwIn0=)
 
-Then replace `YOUR_BAKBAK_API_KEY` in Cursor's MCP settings. Or add to `~/.cursor/mcp.json`:
+For the local server, replace `YOUR_BAKBAK_API_KEY` in Cursor's MCP settings. The hosted server
+needs no key in the config: Cursor opens the Bakbak sign-in page, where you paste your key once.
+Or add to `~/.cursor/mcp.json`:
 
 ```json
 {
@@ -99,8 +102,9 @@ Then replace `YOUR_BAKBAK_API_KEY` in Cursor's MCP settings. Or add to `~/.curso
 }
 ```
 
-For the hosted server use `{ "url": "https://mcp.bakbak.si/mcp", "headers": { "Authorization":
-"Bearer YOUR_BAKBAK_API_KEY" } }` as the server entry.
+For the hosted server use `{ "url": "https://mcp.bakbak.si/mcp" }` as the server entry (sign in
+with OAuth), or add `"headers": { "Authorization": "Bearer YOUR_BAKBAK_API_KEY" }` to skip the
+sign-in.
 
 ### VS Code
 
@@ -164,8 +168,8 @@ YOUR_BAKBAK_API_KEY" } }`.
 - Hosted: connect to `https://mcp.bakbak.si/mcp` (streamable HTTP, protocol revisions
   2026-07-28 and 2025-era) with `Authorization: Bearer <key>`, `X-API-Key: <key>`, or OAuth 2.1
   (discovery via `/.well-known/oauth-protected-resource/mcp`, dynamic client registration or
-  client ID metadata documents, PKCE S256). OAuth redirect URIs must be `https`, or `http` on a
-  loopback address.
+  client ID metadata documents, PKCE S256). OAuth redirect URIs must be `https`, `http` on a
+  loopback address, or a native app's own scheme such as `cursor://` (RFC 8252).
 
 ## Tools
 
@@ -251,18 +255,22 @@ Configuration is by environment variable only.
 
 ### Hosted mode (`bakbak-mcp --http`)
 
-| Variable           | Default                     | Meaning                                                                                                                                                              |
-| ------------------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MCP_PUBLIC_URL`   | required                    | Public origin, e.g. `https://mcp.bakbak.si`. Every advertised URL is built from it, never from the `Host` header.                                                    |
-| `MCP_TOKEN_SECRET` | required                    | Secret for sealing OAuth tokens: at least 32 characters (`openssl rand -base64 48`). Rotate with `new_kid:new_secret,old_kid:old_secret`: the first seals, all open. |
-| `BAKBAK_BASE_URL`  | `https://hub.getraya.app`   | API base URL.                                                                                                                                                        |
-| `AUDIO_DIR`        | `<tmp>/bakbak-mcp-audio`    | Where audio is kept until it expires.                                                                                                                                |
-| `AUDIO_TTL`        | `1h`                        | How long audio links work: seconds, or `90s`, `30m`, `1h`.                                                                                                           |
-| `AUDIO_MAX_BYTES`  | `2G`                        | Cap on stored audio; the oldest files go first. Bytes, or `512M`, `2G`.                                                                                              |
-| `PORT`             | `8080`                      | Listening port.                                                                                                                                                      |
-| `HOST`             | `0.0.0.0`                   | Listening address.                                                                                                                                                   |
-| `TRUSTED_PROXIES`  | loopback and private ranges | CIDRs of reverse proxies whose `CF-Connecting-IP` / `X-Forwarded-For` are believed (for per-address rate limits). Empty trusts none.                                 |
-| `LOG_LEVEL`        | `info`                      | As above.                                                                                                                                                            |
+| Variable                  | Default                        | Meaning                                                                                                                                                              |
+| ------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MCP_PUBLIC_URL`          | required                       | Public origin, e.g. `https://mcp.bakbak.si`. Every advertised URL is built from it, never from the `Host` header.                                                    |
+| `MCP_TOKEN_SECRET`        | required                       | Secret for sealing OAuth tokens: at least 32 characters (`openssl rand -base64 48`). Rotate with `new_kid:new_secret,old_kid:old_secret`: the first seals, all open. |
+| `BAKBAK_BASE_URL`         | `https://hub.getraya.app`      | API base URL.                                                                                                                                                        |
+| `AUDIO_DIR`               | `<tmp>/bakbak-mcp-audio`       | Where audio is kept until it expires.                                                                                                                                |
+| `AUDIO_TTL`               | `1h`                           | How long audio links work: seconds, or `90s`, `30m`, `1h`.                                                                                                           |
+| `AUDIO_MAX_BYTES`         | `2G`                           | Cap on stored audio; the oldest files go first. Bytes, or `512M`, `2G`.                                                                                              |
+| `AUDIO_MAX_BYTES_PER_KEY` | a quarter of `AUDIO_MAX_BYTES` | Stored audio per API key; a key's own oldest files go first, so one key cannot push out everyone else's links.                                                       |
+| `MAX_OUTPUT_BYTES`        | `512M`                         | Most audio one `text_to_speech` call may produce, estimated from the text before any credits are spent.                                                              |
+| `TTS_CONCURRENCY_PER_KEY` | `2`                            | Most `text_to_speech` calls running at once per API key.                                                                                                             |
+| `INFLIGHT_AUDIO_BYTES`    | `1G`                           | Most estimated audio being produced at once across all calls; at least `MAX_OUTPUT_BYTES`.                                                                           |
+| `PORT`                    | `8080`                         | Listening port.                                                                                                                                                      |
+| `HOST`                    | `0.0.0.0`                      | Listening address.                                                                                                                                                   |
+| `TRUSTED_PROXIES`         | loopback and private ranges    | CIDRs of reverse proxies whose `CF-Connecting-IP` / `X-Forwarded-For` are believed (for per-address rate limits). Empty trusts none.                                 |
+| `LOG_LEVEL`               | `info`                         | As above.                                                                                                                                                            |
 
 ## Errors
 
@@ -287,6 +295,10 @@ read it and act. The first text block is a sentence plus one next step; the seco
 `BAKBAK_API_KEY` and the dashboard. In hosted mode, a request without valid credentials gets
 HTTP 401 with `WWW-Authenticate: Bearer resource_metadata="…"`, which starts the client's
 OAuth flow.
+
+Hosted mode also refuses, as tool errors and before spending credits, a call whose audio would
+exceed `MAX_OUTPUT_BYTES` (the message suggests `mp3`, `pcm_s16le`, a lower sample rate or
+splitting the text) and a call beyond `TTS_CONCURRENCY_PER_KEY` running calls for the key.
 
 ## Retries and timeouts
 
@@ -321,6 +333,8 @@ four); for very long texts, use local mode or split the text across calls.
     deleted. Anyone with the link can download it until then.
   - Text is sent to the Bakbak API and is not stored or logged by this server. Logs record
     request ids, sizes, timings, the caller's IP address and a one-way fingerprint of the key.
+
+Bakbak's privacy policy: <https://bakbak.si/privacy-policy>.
 
 ## Self-hosting
 

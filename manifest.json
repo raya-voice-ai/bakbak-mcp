@@ -43,6 +43,7 @@
   ],
   "keywords": ["text-to-speech", "tts", "hindi", "indian languages", "voice", "audio", "bakbak"],
   "license": "Apache-2.0",
+  "privacy_policies": ["https://bakbak.si/privacy-policy"],
   "user_config": {
     "api_key": {
       "type": "string",

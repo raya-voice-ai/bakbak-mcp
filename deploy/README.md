@@ -40,17 +40,21 @@ volume at `/data/audio`, runs with a read-only root file system, no capabilities
 
 ## Environment
 
-| Variable           | Value here                | Notes                                                                                       |
-| ------------------ | ------------------------- | ------------------------------------------------------------------------------------------- |
-| `MCP_PUBLIC_URL`   | `https://mcp.bakbak.si`   | Every advertised URL (OAuth metadata, audio links) is built from it, never from `Host`.     |
-| `MCP_TOKEN_SECRET` | from `.env`               | At least 32 characters. See rotation below.                                                 |
-| `BAKBAK_BASE_URL`  | `https://hub.getraya.app` | The API the tools call.                                                                     |
-| `AUDIO_DIR`        | `/data/audio`             | A volume.                                                                                   |
-| `AUDIO_TTL`        | `1h`                      | Audio links stop working after this.                                                        |
-| `AUDIO_MAX_BYTES`  | `2G`                      | Oldest audio is deleted first beyond this.                                                  |
-| `PORT`             | `8080`                    |                                                                                             |
-| `TRUSTED_PROXIES`  | unset                     | Default: loopback and private ranges, which include the Docker network Caddy connects from. |
-| `LOG_LEVEL`        | `info`                    |                                                                                             |
+| Variable                  | Value here                             | Notes                                                                                       |
+| ------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `MCP_PUBLIC_URL`          | `https://mcp.bakbak.si`                | Every advertised URL (OAuth metadata, audio links) is built from it, never from `Host`.     |
+| `MCP_TOKEN_SECRET`        | from `.env`                            | At least 32 characters. See rotation below.                                                 |
+| `BAKBAK_BASE_URL`         | `https://hub.getraya.app`              | The API the tools call.                                                                     |
+| `AUDIO_DIR`               | `/data/audio`                          | A volume.                                                                                   |
+| `AUDIO_TTL`               | `1h`                                   | Audio links stop working after this.                                                        |
+| `AUDIO_MAX_BYTES`         | `2G`                                   | Oldest audio is deleted first beyond this.                                                  |
+| `AUDIO_MAX_BYTES_PER_KEY` | unset (a quarter of `AUDIO_MAX_BYTES`) | Per-key share of stored audio.                                                              |
+| `MAX_OUTPUT_BYTES`        | unset (`512M`)                         | Largest estimated audio of one call.                                                        |
+| `TTS_CONCURRENCY_PER_KEY` | unset (`2`)                            | Calls running at once per key.                                                              |
+| `INFLIGHT_AUDIO_BYTES`    | unset (`1G`)                           | Estimated audio being produced at once.                                                     |
+| `PORT`                    | `8080`                                 |                                                                                             |
+| `TRUSTED_PROXIES`         | unset                                  | Default: loopback and private ranges, which include the Docker network Caddy connects from. |
+| `LOG_LEVEL`               | `info`                                 |                                                                                             |
 
 ## Edge proxy (Caddy in Docker)
 
@@ -59,17 +63,26 @@ The edge Caddy imports `/etc/caddy/sites.d/*.caddy`. A site for this server:
 ```caddyfile
 mcp.bakbak.si {
 	import security_headers
+	log {
+		output stdout
+		format filter {
+			request>headers>Authorization delete
+			request>headers>X-Api-Key delete
+			request>headers>Cookie delete
+			request>headers>Cf-Connecting-Ip delete
+			wrap json
+		}
+	}
+	# Believe CF-Connecting-IP only from Cloudflare's addresses
+	# (https://www.cloudflare.com/ips/, checked 2026-11-21), so a client that
+	# reaches this host directly cannot pick its own rate-limit bucket.
+	@not_cloudflare not remote_ip 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+	request_header @not_cloudflare -CF-Connecting-IP
+	request_body {
+		max_size 1MB
+	}
 	reverse_proxy bakbak-mcp:8080 {
 		flush_interval -1
-	}
-	log {
-		format filter {
-			fields {
-				request>headers>Authorization delete
-				request>headers>X-Api-Key delete
-				request>headers>Cookie delete
-			}
-		}
 	}
 }
 ```
@@ -119,10 +132,18 @@ Requirements for any proxy in front of the server:
 - **Logs:** JSON lines on stderr. Each request logs method, path (audio ids replaced by
   `<id>`), status, duration and client address; tool calls log character counts, piece counts,
   byte sizes, request ids and a one-way key fingerprint. Never text, keys or tokens.
-- **Rate limits** (per instance): `POST /register` 20 per minute per address,
-  `POST /authorize` 10 per minute per address, `GET /authorize` with an unregistered (metadata
-  document) client 30 per minute per address, and 60 tool calls per minute per API key (bursts
+- **Rate limits** (per instance; an IPv6 "address" here is its /64): `POST /register` 20 per
+  minute per address, `POST /authorize` 10 per minute per address, `GET /authorize` with an
+  unregistered (metadata document) client 30 per minute per address, API-key checks of
+  not-yet-known keys at `/mcp` 20 per minute per address (bursts of 10; a wrong key is then
+  refused for a minute without asking Bakbak), and 60 tool calls per minute per API key (bursts
   of 30).
+- **Resource limits:** each call's audio is streamed to disk, so memory stays small whatever the
+  text length. `text_to_speech` is refused up front when its estimated audio exceeds
+  `MAX_OUTPUT_BYTES` (512 MB), when the key already has `TTS_CONCURRENCY_PER_KEY` (2) calls
+  running, or when the calls in progress would exceed `INFLIGHT_AUDIO_BYTES` (1 GB). Stored
+  audio is capped at `AUDIO_MAX_BYTES` overall and `AUDIO_MAX_BYTES_PER_KEY` per key. The
+  compose file also caps the container at 1 GB of memory and 256 processes.
 - **Rotating `MCP_TOKEN_SECRET`:** set `MCP_TOKEN_SECRET=k2:<new>,k1:<old>` and restart. New
   tokens are sealed with `k2`; tokens sealed with `k1` keep working. After 30 days (the
   refresh-token lifetime), remove `k1:<old>`. Removing a secret immediately signs every client

@@ -1,6 +1,7 @@
 // Bundles the server (src/cli.ts and every dependency) into one ES module.
 // Used by build-mcpb.mjs for the Claude Desktop bundle, and by the stdio test.
 
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,6 +27,22 @@ export async function bundleServer(outfile) {
     },
     logLevel: 'warning',
   });
+}
+
+/**
+ * The server directory of the Claude Desktop bundle: `server/index.js`, an ES
+ * module, with a `package.json` saying so (Node reads `.js` as CommonJS
+ * otherwise).
+ *
+ * @param {string} dir
+ */
+export async function bundleMcpbServer(dir) {
+  await mkdir(dir, { recursive: true });
+  await bundleServer(path.join(dir, 'index.js'));
+  await writeFile(
+    path.join(dir, 'package.json'),
+    JSON.stringify({ type: 'module', private: true }, null, 2) + '\n',
+  );
 }
 
 // `node scripts/bundle.mjs <outfile>` (used by the Dockerfile).

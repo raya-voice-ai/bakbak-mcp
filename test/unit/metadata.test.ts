@@ -77,3 +77,33 @@ describe('conformance manifest', () => {
     }
   });
 });
+
+describe('supply chain and listings', () => {
+  it('names the privacy policy in the bundle manifest', () => {
+    expect(json('manifest.json').privacy_policies).toEqual(['https://bakbak.si/privacy-policy']);
+  });
+
+  it('pins every GitHub Action by commit SHA', () => {
+    const files = [
+      ...readdirSync(path.join(root, '.github', 'workflows')).map((f) =>
+        path.join('.github', 'workflows', f),
+      ),
+      path.join('.github', 'actions', 'setup', 'action.yml'),
+    ];
+    for (const file of files) {
+      for (const [, ref] of readFileSync(path.join(root, file), 'utf8').matchAll(
+        /uses:\s*(\S+)/g,
+      )) {
+        if (ref?.startsWith('./')) continue;
+        expect(ref, file).toMatch(/@[0-9a-f]{40}$/);
+      }
+    }
+  });
+
+  it('pins the container base images by digest', () => {
+    const froms = readFileSync(path.join(root, 'Dockerfile'), 'utf8').match(/^FROM\s+\S+/gm) ?? [];
+    for (const from of froms.filter((f) => !f.includes('scratch'))) {
+      expect(from).toMatch(/@sha256:[0-9a-f]{64}$/);
+    }
+  });
+});

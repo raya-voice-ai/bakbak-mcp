@@ -14,7 +14,7 @@ import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { bundleServer } from '../../scripts/bundle.mjs';
+import { bundleMcpbServer } from '../../scripts/bundle.mjs';
 import { textOf } from '../helpers/localServer.js';
 import { type MockApi, TEST_KEY, startMockApi } from '../helpers/mockApi.js';
 
@@ -23,8 +23,10 @@ let bundle: string;
 
 beforeAll(async () => {
   api = await startMockApi();
-  bundle = path.join(await mkdtemp(path.join(tmpdir(), 'bakbak-bundle-')), 'server.mjs');
-  await bundleServer(bundle);
+  // Exactly the Claude Desktop bundle's layout: server/index.js plus its package.json.
+  const server = path.join(await mkdtemp(path.join(tmpdir(), 'bakbak-bundle-')), 'server');
+  await bundleMcpbServer(server);
+  bundle = path.join(server, 'index.js');
 }, 60_000);
 afterAll(async () => {
   await api.close();

@@ -34,6 +34,9 @@ services:
       - audio:/data/audio
     networks:
       - edge
+    # Audio streams to disk, so memory stays small; these are backstops.
+    mem_limit: 1g
+    pids_limit: 256
     read_only: true
     tmpfs:
       - /tmp

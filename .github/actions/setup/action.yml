@@ -1,0 +1,30 @@
+name: Set up
+description: Node, the Bakbak SDK checkout while package.json links it, and npm ci.
+inputs:
+  node-version:
+    description: Node.js version
+    default: '24'
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        registry-url: https://registry.npmjs.org
+    - id: sdk
+      shell: bash
+      run: echo "spec=$(node -p "require('./package.json').dependencies.bakbak")" >> "$GITHUB_OUTPUT"
+    # Until the SDK is published, package.json depends on "file:../bakbak-js".
+    - if: startsWith(steps.sdk.outputs.spec, 'file:')
+      uses: actions/checkout@v7
+      with:
+        repository: raya-voice-ai/bakbak-js
+        path: .bakbak-js
+    - if: startsWith(steps.sdk.outputs.spec, 'file:')
+      shell: bash
+      run: |
+        mv .bakbak-js ../bakbak-js
+        cd ../bakbak-js && npm ci --no-audit --no-fund && npm run build
+    - shell: bash
+      run: npm ci --no-audit --no-fund

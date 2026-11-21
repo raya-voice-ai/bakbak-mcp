@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: npm run lint
+      - run: npm run typecheck
+
+  test:
+    name: Tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm test
+
+  build:
+    name: Build, package and bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: npm run build
+      - run: node dist/cli.js --version
+      - run: npm pack --dry-run
+      - name: Claude Desktop bundle (validated with the official mcpb CLI)
+        run: npm run bundle:mcpb
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mcpb
+          path: '*.mcpb'
+          if-no-files-found: error
+      - name: Container image
+        run: |
+          if [ -d ../bakbak-js ]; then
+            docker build --build-context bakbak-js=../bakbak-js -t bakbak-mcp:ci .
+          else
+            docker build -t bakbak-mcp:ci .
+          fi
+
+  conformance:
+    name: Conformance manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: cd conformance && sha256sum -c MANIFEST.sha256
+
+  live:
+    name: Live tests (staging)
+    # Only where the secrets exist; never on pull requests from forks.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    needs: [test]
+    env:
+      BAKBAK_API_KEY: ${{ secrets.BAKBAK_API_KEY }}
+      BAKBAK_BASE_URL: ${{ secrets.BAKBAK_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+        if: env.BAKBAK_API_KEY != ''
+      - uses: ./.github/actions/setup
+        if: env.BAKBAK_API_KEY != ''
+      - run: npm run test:live
+        if: env.BAKBAK_API_KEY != ''

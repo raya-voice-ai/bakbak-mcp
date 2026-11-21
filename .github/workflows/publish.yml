@@ -1,0 +1,72 @@
+name: Publish
+
+# Runs when release-please (or a person) publishes a GitHub release.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    name: npm (trusted publishing, with provenance)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Refuse to publish a local SDK link
+        run: |
+          spec=$(node -p "require('./package.json').dependencies.bakbak")
+          case "$spec" in file:*) echo "::error::package.json still depends on $spec; switch to the published SDK (see CONTRIBUTING.md)"; exit 1;; esac
+      - uses: ./.github/actions/setup
+      - run: npm test
+      - run: npm run build
+      - name: Publish (prereleases under the "next" tag)
+        run: |
+          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            npm publish --provenance --access public --tag next
+          else
+            npm publish --provenance --access public
+          fi
+
+  mcpb:
+    name: Claude Desktop bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: npm run bundle:mcpb
+      - run: gh release upload "${{ github.event.release.tag_name }}" bakbak-mcp-*.mcpb --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  registry:
+    name: MCP Registry
+    runs-on: ubuntu-latest
+    needs: [npm]
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      MCP_PUBLISHER_VERSION: v1.8.7
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install mcp-publisher (verified with cosign)
+        run: |
+          base="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          file="mcp-publisher_linux_amd64.tar.gz"
+          curl -fsSLO "$base/$file"
+          curl -fsSLO "$base/$file.sigstore.json"
+          curl -fsSL -o cosign https://github.com/sigstore/cosign/releases/download/v2.6.5/cosign-linux-amd64
+          chmod +x cosign
+          ./cosign verify-blob "$file" --bundle "$file.sigstore.json" \
+            --certificate-identity-regexp '^https://github.com/modelcontextprotocol/registry/' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          tar xzf "$file" mcp-publisher
+      - run: ./mcp-publisher login github-oidc
+      - run: ./mcp-publisher publish

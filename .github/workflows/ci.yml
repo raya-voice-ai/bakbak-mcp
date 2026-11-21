@@ -18,7 +18,7 @@ jobs:
     name: Lint and types
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
       - run: npm run lint
       - run: npm run typecheck
@@ -31,7 +31,7 @@ jobs:
       matrix:
         node: ['22', '24']
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node }}
@@ -41,14 +41,14 @@ jobs:
     name: Build, package and bundle
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
       - run: npm run build
       - run: node dist/cli.js --version
       - run: npm pack --dry-run
       - name: Claude Desktop bundle (validated with the official mcpb CLI)
         run: npm run bundle:mcpb
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mcpb
           path: '*.mcpb'
@@ -65,7 +65,7 @@ jobs:
     name: Conformance manifest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: cd conformance && sha256sum -c MANIFEST.sha256
 
   live:
@@ -78,7 +78,7 @@ jobs:
       BAKBAK_API_KEY: ${{ secrets.BAKBAK_API_KEY }}
       BAKBAK_BASE_URL: ${{ secrets.BAKBAK_BASE_URL }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.BAKBAK_API_KEY != ''
       - uses: ./.github/actions/setup
         if: env.BAKBAK_API_KEY != ''

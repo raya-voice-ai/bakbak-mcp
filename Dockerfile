@@ -9,10 +9,12 @@
 #
 #   docker build --build-context bakbak-js=../bakbak-js -t bakbak-mcp .
 
+# Base images are pinned by digest (node:24-slim); update the digest deliberately.
+
 # Empty unless overridden with --build-context bakbak-js=<path>.
 FROM scratch AS bakbak-js
 
-FROM node:24-slim AS build
+FROM node:24-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS build
 WORKDIR /src/bakbak-mcp
 COPY package.json package-lock.json ./
 COPY tsconfig.json tsconfig.build.json ./
@@ -23,7 +25,7 @@ RUN --mount=type=bind,from=bakbak-js,target=/src/bakbak-js \
     npm ci --no-audit --no-fund \
     && node scripts/bundle.mjs /out/server.mjs
 
-FROM node:24-slim
+FROM node:24-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
 ENV NODE_ENV=production \
     PORT=8080 \
     HOST=0.0.0.0 \

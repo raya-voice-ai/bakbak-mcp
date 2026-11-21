@@ -510,7 +510,10 @@ describe('cancellation', () => {
         signal: controller.signal,
       },
     );
-    await new Promise((r) => setTimeout(r, 100));
+    // Abort once the first piece is on the WebSocket.
+    for (let i = 0; i < 200 && !api.synthesisRequests().some((r) => r.transport === 'ws'); i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
     controller.abort();
     await expect(pending).rejects.toThrow();
     // Give the server a moment to see the cancellation, then nothing more is sent.

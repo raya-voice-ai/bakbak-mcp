@@ -1,0 +1,50 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.raya-voice-ai/bakbak-mcp",
+  "title": "Bakbak",
+  "description": "Text to speech for Hindi, 12 more Indian languages and English with the Bakbak API.",
+  "repository": {
+    "url": "https://github.com/raya-voice-ai/bakbak-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://bakbak.getraya.app",
+  "version": "1.0.0-rc.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "bakbak-mcp",
+      "version": "1.0.0-rc.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "BAKBAK_API_KEY",
+          "description": "Your Bakbak API key, from https://bakbak.getraya.app",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "BAKBAK_MCP_OUTPUT_DIR",
+          "description": "Folder for audio files (default ~/Documents/Bakbak, or ~/Bakbak)",
+          "isRequired": false,
+          "format": "filepath"
+        },
+        {
+          "name": "BAKBAK_BASE_URL",
+          "description": "API base URL (default https://hub.getraya.app)",
+          "isRequired": false,
+          "format": "string"
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.bakbak.si/mcp"
+    }
+  ]
+}

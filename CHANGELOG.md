@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Releases are made by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org).
 
+## [1.0.0-rc.3](https://github.com/raya-voice-ai/bakbak-mcp/compare/v1.0.0-rc.2...v1.0.0-rc.3) (2026-11-22)
+
+
+### Features
+
+* bundle Bakbak's developer documentation for coding assistants: search_docs and read_docs tools, bakbak://docs/ resources, and the integrate_bakbak, review_bakbak_integration and choose_voice prompts ([2e07cfc](https://github.com/raya-voice-ai/bakbak-mcp/commit/2e07cfce46f838715f7e2a8c02c5fa9b33c07081))
+
 ## [1.0.0-rc.2](https://github.com/raya-voice-ai/bakbak-mcp/compare/v1.0.0-rc.1...v1.0.0-rc.2) (2026-11-22)
 
 

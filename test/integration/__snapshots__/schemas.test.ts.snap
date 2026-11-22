@@ -117,7 +117,7 @@ exports[`tool schemas > hosted mode matches the snapshot 1`] = `
           "type": "object",
         },
         "speed": {
-          "description": "Speaking rate from 0.5 to 1.5 (default 1.0).",
+          "description": "Speaking rate from 0.5 to 1.5 (default 1.0). Standard voices only; m1 voices ignore it.",
           "type": "number",
         },
         "text": {
@@ -473,7 +473,7 @@ exports[`tool schemas > local mode matches the snapshot 1`] = `
           "type": "boolean",
         },
         "speed": {
-          "description": "Speaking rate from 0.5 to 1.5 (default 1.0).",
+          "description": "Speaking rate from 0.5 to 1.5 (default 1.0). Standard voices only; m1 voices ignore it.",
           "type": "number",
         },
         "text": {

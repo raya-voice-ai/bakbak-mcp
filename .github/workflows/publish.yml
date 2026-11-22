@@ -81,5 +81,23 @@ jobs:
           curl -fsSLO "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/$file"
           echo "${MCP_PUBLISHER_SHA256}  $file" | sha256sum -c -
           tar xzf "$file" mcp-publisher
+      # npm can take a few minutes to serve a version it has just accepted, and the registry
+      # refuses a server whose npm version it cannot see yet. Wait for npm, then retry briefly.
+      - name: Wait for npm to serve this version
+        run: |
+          url="https://registry.npmjs.org/bakbak-mcp/${GITHUB_REF_NAME#v}"
+          for _ in $(seq 1 30); do
+            curl -fsS -o /dev/null -H 'Cache-Control: no-cache' "$url" && exit 0
+            sleep 10
+          done
+          echo "::error::npm did not serve $url within 5 minutes"
+          exit 1
       - run: ./mcp-publisher login github-oidc
-      - run: ./mcp-publisher publish
+      - name: Publish to the MCP Registry
+        run: |
+          for attempt in 1 2 3 4 5; do
+            ./mcp-publisher publish && exit 0
+            echo "Attempt $attempt failed; retrying in 30 seconds."
+            sleep 30
+          done
+          exit 1

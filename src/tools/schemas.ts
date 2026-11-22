@@ -79,7 +79,12 @@ const ttsBase = {
     .describe(
       "standard or m1. Must be the voice's model; if omitted, the chosen voice's own model is used.",
     ),
-  speed: z.number().optional().describe('Speaking rate from 0.5 to 1.5 (default 1.0).'),
+  speed: z
+    .number()
+    .optional()
+    .describe(
+      'Speaking rate from 0.5 to 1.5 (default 1.0). Standard voices only; m1 voices ignore it.',
+    ),
   output_format: outputFormatSchema.optional(),
   include_audio: z
     .boolean()

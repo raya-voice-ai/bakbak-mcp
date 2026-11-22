@@ -78,15 +78,16 @@ Releases are automated:
    open on `main`, bumping `package.json`, `src/version.ts`, `manifest.json` and `server.json`
    together and updating `CHANGELOG.md`.
 2. Merging it tags the release and publishes a GitHub release.
-3. The publish workflow then publishes to npm with provenance via trusted publishing (OIDC,
-   prereleases under the `next` tag), attaches the `.mcpb` bundle to the release, and publishes
-   `server.json` to the MCP Registry with `mcp-publisher` (GitHub OIDC, namespace
-   `io.github.raya-voice-ai`).
+3. The publish workflow runs on the tag and refuses one that is not on `main`. It waits for a
+   maintainer to approve the `npm` environment, then publishes to npm with provenance via
+   trusted publishing (OIDC, prereleases under the `next` tag), attaches the `.mcpb` bundle to
+   the release, and publishes `server.json` to the MCP Registry with `mcp-publisher` (GitHub
+   OIDC, namespace `io.github.raya-voice-ai`).
 
 Versions are release candidates (`1.0.0-rc.N`) until 1.0.0. To graduate, set
 `"prerelease": false` in `release-please-config.json` and add a commit with the footer
 `Release-As: 1.0.0`.
 
-One-time setup for maintainers: configure npm trusted publishing for this repository and the
-`publish.yml` workflow on npmjs.com, and add the `BAKBAK_API_KEY` and `BAKBAK_BASE_URL`
+One-time setup for maintainers: configure npm trusted publishing on npmjs.com for this
+repository, the `publish.yml` workflow and the `npm` environment, and add the `BAKBAK_API_KEY` and `BAKBAK_BASE_URL`
 repository secrets if live tests should run in CI.

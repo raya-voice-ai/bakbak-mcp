@@ -80,8 +80,8 @@ Releases are automated:
 2. Merging it tags the release and publishes a GitHub release.
 3. The publish workflow runs on the tag and refuses one that is not on `main`. It waits for a
    maintainer to approve the `npm` environment, then publishes to npm with provenance via
-   trusted publishing (OIDC, prereleases under the `next` tag), attaches the `.mcpb` bundle to
-   the release, and publishes `server.json` to the MCP Registry with `mcp-publisher` (GitHub
+   trusted publishing (OIDC; prereleases take the `latest` tag until a stable version exists,
+   then go under `next`), attaches the `.mcpb` bundle to the release, and publishes `server.json` to the MCP Registry with `mcp-publisher` (GitHub
    OIDC, namespace `io.github.raya-voice-ai`).
 
 Versions are release candidates (`1.0.0-rc.N`) until 1.0.0. To graduate, set

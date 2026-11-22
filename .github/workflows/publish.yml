@@ -18,11 +18,21 @@ jobs:
     name: npm (trusted publishing, with provenance)
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    # The npm environment waits for the maintainer's approval and only accepts v* tags. The
+    # other jobs need this one, so one approval releases everything.
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/bakbak-mcp
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # Releases come only from main: refuse a v* tag on a commit main does not contain.
+      - name: The tag is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
       - name: Refuse to publish a local SDK link
         run: |
           spec=$(node -p "require('./package.json').dependencies.bakbak")
@@ -41,7 +51,7 @@ jobs:
 
   mcpb:
     name: Claude Desktop bundle
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [npm]
     runs-on: ubuntu-latest
     permissions:
       contents: write

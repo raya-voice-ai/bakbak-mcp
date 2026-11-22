@@ -14,12 +14,16 @@ It runs two ways:
   back as a private download link. Sign in with OAuth (claude.ai connectors) or send your API
   key as a header.
 
-Both offer the same two tools: [`text_to_speech`](#text_to_speech) and
-[`list_voices`](#list_voices). Full documentation:
-<https://docs.litwizlabs.com/documentation/tts-mcp>.
+Both offer the same tools: [`text_to_speech`](#text_to_speech) and
+[`list_voices`](#list_voices) to make speech, and [`search_docs`](#search_docs) and
+[`read_docs`](#read_docs), Bakbak's developer documentation bundled into the server, so a
+coding assistant can integrate Bakbak into your app: the Python and JavaScript SDKs, the LiveKit
+Agents plugin, Pipecat, Twilio and other telephony, web and mobile apps, and the raw API from any
+language. Full documentation: <https://docs.bakbak.si/integrations/mcp>.
 
 **Contents:** [Get an API key](#get-an-api-key) · [Set up your client](#set-up-your-client) ·
-[Tools](#tools) · [Languages and models](#languages-and-models) ·
+[Tools](#tools) · [Developer documentation](#developer-documentation) ·
+[Languages and models](#languages-and-models) ·
 [Example prompts](#example-prompts) · [Configuration](#configuration) ·
 [Errors](#errors) · [Retries and timeouts](#retries-and-timeouts) ·
 [Latency tips](#latency-tips) · [Privacy](#privacy) · [Self-hosting](#self-hosting) ·
@@ -230,6 +234,63 @@ Lists voices. Free. Read-only.
 Returns `{ "voices": [{ "id", "name", "language", "model" }], "count", "total" }`, where
 `total` counts every match before the limit.
 
+### `search_docs`
+
+Searches the bundled developer documentation and returns the best-matching sections, each with
+its page id, a short excerpt and the `read_docs` arguments that open it. Free, read-only, and works
+without an API key.
+
+| Parameter | Type    | Default  | Description                                                                     |
+| --------- | ------- | -------- | ------------------------------------------------------------------------------- |
+| `query`   | string  | required | Words or identifiers, e.g. `cancel on barge-in`, `twilio mulaw`, `send_stream`. |
+| `limit`   | integer | `6`      | Most sections to return (1–10); at most two come from the same page.            |
+
+### `read_docs`
+
+Returns a documentation page as Markdown, or one section of it. Without `page`, returns the index
+of every page. Free, read-only, and works without an API key.
+
+| Parameter | Type   | Default   | Description                                                                                                  |
+| --------- | ------ | --------- | ------------------------------------------------------------------------------------------------------------ |
+| `page`    | string | the index | A page id such as `start-here`, `livekit` or `examples/python/llm_streaming.py`; aliases like `twilio` work. |
+| `section` | string | the page  | A heading of the page; returns that section with its subsections.                                            |
+
+## Developer documentation
+
+Ask your coding assistant to build with Bakbak and it reads these pages through `read_docs` and
+`search_docs` (the server's instructions tell it to, before it writes code). The pages ship inside
+the package, so they match this release, need no network and use no credits.
+
+| Page                                                           | What it covers                                                                           |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `start-here`                                                   | Which SDK, plugin or API to use for each platform; the facts every integration needs     |
+| `best-practices`                                               | Text, voices, transports, latency, formats, retries, concurrency, billing, security      |
+| `livekit`                                                      | LiveKit Agents with `livekit-plugins-bakbak`: setup, languages, SIP, fallbacks, metrics  |
+| `pipecat`                                                      | A Pipecat `TTSService` on the Python SDK's WebSocket                                     |
+| `telephony`                                                    | Twilio, Plivo, Exotel, Vonage and SIP: formats, play and clear messages, a Twilio bridge |
+| `voice-agents`                                                 | Your own STT → LLM → TTS loop: contexts, `send_stream`, barge-in, latency                |
+| `web`                                                          | Browsers, Next.js, FastAPI, serverless and mobile apps, with the key kept on the server  |
+| `long-form`                                                    | Text over 5,000 characters, joining audio, batch parallelism, caching                    |
+| `raw-api`                                                      | HTTP, SSE and WebSocket from any language, with a Go client                              |
+| `troubleshooting`                                              | Symptoms, causes and fixes                                                               |
+| `python-sdk`, `javascript-sdk`, `livekit-plugin`               | The SDK and plugin READMEs                                                               |
+| `websocket-api`, `errors`, `output-formats`, `client-behavior` | API references and the client contract                                                   |
+| `examples/…`                                                   | The runnable examples of the Python SDK, the JavaScript SDK and the LiveKit plugin       |
+| `mcp-server`                                                   | This README                                                                              |
+
+Every page is also a resource, `bakbak://docs/<page id>` (`text/markdown`), for clients that let
+you attach resources (in Claude Code, type `@bakbak:`).
+
+### Prompts
+
+| Prompt                      | Arguments                          | What it does                                                                           |
+| --------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------- |
+| `integrate_bakbak`          | `platform`, `goal` (both optional) | Adds Bakbak to the open project: reads the right guide, picks a voice, writes the code |
+| `review_bakbak_integration` | `focus` (optional)                 | Reviews the project's Bakbak code against the best practices                           |
+| `choose_voice`              | `language`, `use_case`             | Lists voices, lets you hear a few, and gives the `voice_id` and `model` to use         |
+
+In Claude Code they are slash commands, e.g. `/mcp__bakbak__integrate_bakbak twilio`.
+
 ## Languages and models
 
 | Model      | Languages                                                                                                                                                                            |
@@ -252,6 +313,13 @@ That is the voice catalog of 22 November 2026; `list_voices` is the source of tr
 
 The server tells the model to pick a voice with `list_voices`, to pass the voice's own model,
 to write Hindi in Devanagari, and that synthesis costs credits.
+
+For developers:
+
+- "Add Bakbak TTS to my LiveKit agent, in Hindi."
+- "Our Twilio voice bot uses ElevenLabs; switch it to Bakbak and handle barge-in."
+- "Write a Go function that streams Bakbak audio over SSE."
+- "Why does my Bakbak audio sound like static in the browser?"
 
 ## Configuration
 
@@ -304,7 +372,7 @@ read it and act. The first text block is a sentence plus one next step; the seco
 ```
 
 `message`, `error_code` and `request_id` come from the API unchanged; every `error_code` is
-described at <https://docs.litwizlabs.com/documentation/tts-errors>. Invalid arguments
+described at <https://docs.bakbak.si/text-to-speech/errors>. Invalid arguments
 (including an unknown parameter) are reported the same way. A missing key names
 `BAKBAK_API_KEY` and the dashboard. In hosted mode, a request without valid credentials gets
 HTTP 401 with `WWW-Authenticate: Bearer resource_metadata="…"`, which starts the client's
@@ -338,7 +406,8 @@ four); for very long texts, use local mode or split the text across calls.
 ## Privacy
 
 - **Local mode** sends text only to the Bakbak API you configured. Audio stays on your computer.
-  Nothing else is contacted: no telemetry, no update checks.
+  Nothing else is contacted: no telemetry, no update checks. The documentation tools read pages
+  bundled in the package and make no network requests.
 - **Hosted mode** (`mcp.bakbak.si`) keeps no database:
   - Your API key is checked with Bakbak and then exists only inside encrypted tokens (AES-256-GCM)
     held by your MCP client. Access tokens last one hour, refresh tokens 30 days. Deleting the

@@ -22,6 +22,8 @@ jobs:
       - uses: ./.github/actions/setup
       - run: npm run lint
       - run: npm run typecheck
+      - name: Bundled documentation matches knowledge/, README.md and conformance/
+        run: npm run knowledge:check
 
   test:
     name: Tests (Node ${{ matrix.node }})

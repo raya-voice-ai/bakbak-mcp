@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { VERSION } from '../../src/version.js';
+import { TOOL_NAMES } from '../../src/server.js';
 
 const root = path.resolve(import.meta.dirname, '..', '..');
 const json = (file: string) =>
@@ -38,10 +39,10 @@ describe('release metadata', () => {
       api_key: { sensitive: true },
       output_dir: { type: 'directory' },
     });
-    expect((manifest.tools as { name: string }[]).map((t) => t.name).sort()).toEqual([
-      'list_voices',
-      'text_to_speech',
-    ]);
+    // The bundle's directory listing names exactly the tools the server registers.
+    expect((manifest.tools as { name: string }[]).map((t) => t.name).sort()).toEqual(
+      [...TOOL_NAMES].sort(),
+    );
   });
 });
 

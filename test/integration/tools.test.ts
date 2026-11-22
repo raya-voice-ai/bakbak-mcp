@@ -49,9 +49,14 @@ function structured(result: ToolResult): Record<string, unknown> {
 const SENTENCE = 'यह एक लंबा वाक्य है जो परीक्षण के लिए लिखा गया है।';
 
 describe('discovery', () => {
-  it('lists exactly the two tools, with annotations and server instructions', async () => {
+  it('lists exactly the four tools, with annotations and server instructions', async () => {
     const { tools } = await h.client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(['list_voices', 'text_to_speech']);
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      'list_voices',
+      'read_docs',
+      'search_docs',
+      'text_to_speech',
+    ]);
     const tts = tools.find((t) => t.name === 'text_to_speech')!;
     // Local mode can replace files (overwrite), so it is marked destructive.
     expect(tts.annotations).toMatchObject({
@@ -300,7 +305,7 @@ describe('errors', () => {
   it('names BAKBAK_API_KEY and the dashboard when no key is set, yet lists tools', async () => {
     const noKey = await connectLocal(api.baseURL, { apiKey: undefined });
     try {
-      expect((await noKey.client.listTools()).tools).toHaveLength(2);
+      expect((await noKey.client.listTools()).tools).toHaveLength(4);
       for (const [name, args] of [
         ['text_to_speech', { text: 'hi', language: 'hi' }],
         ['list_voices', {}],

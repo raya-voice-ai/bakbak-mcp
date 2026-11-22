@@ -1,0 +1,2 @@
+# Built by scripts/build-knowledge.mjs from knowledge/; review those files instead.
+src/knowledge/pages.generated.ts linguist-generated=true

@@ -52,6 +52,9 @@
     "test:watch": "vitest --project unit",
     "bundle:mcpb": "node scripts/build-mcpb.mjs",
     "conformance:check": "cd conformance && sha256sum -c MANIFEST.sha256",
+    "knowledge:sync": "node scripts/sync-knowledge.mjs && node scripts/build-knowledge.mjs",
+    "knowledge:build": "node scripts/build-knowledge.mjs",
+    "knowledge:check": "node scripts/build-knowledge.mjs --check",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

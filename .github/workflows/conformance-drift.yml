@@ -1,7 +1,8 @@
 name: Conformance drift
 
 # The four official clients carry identical copies of conformance/. Warn when
-# another repository's manifest differs from this one.
+# another repository's manifest differs from this one, and when the SDK and
+# plugin pages bundled in knowledge/upstream/ are behind their repositories.
 on:
   schedule:
     - cron: '17 6 * * 1'
@@ -31,4 +32,13 @@ jobs:
           done
           if [ "$status" -ne 0 ]; then
             echo "Re-sync conformance/ from the canonical copy (see CONTRIBUTING.md)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Compare knowledge/upstream with the SDK and plugin repositories
+        run: |
+          if ! node scripts/sync-knowledge.mjs --remote --check; then
+            echo "::warning::knowledge/upstream is behind the SDK or plugin repositories"
+            echo "Run npm run knowledge:sync and commit the result (see knowledge/README.md)." >> "$GITHUB_STEP_SUMMARY"
           fi

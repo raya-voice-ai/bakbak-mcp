@@ -8,3 +8,8 @@ package-lock.json
 test/__snapshots__/
 # Rewritten by release-please on every release (its JSON layout differs from Prettier's).
 manifest.json
+# Documentation bundled into the server. Tables stay unpadded (padding costs the
+# model tokens), and upstream/ is copied verbatim; the generated module is
+# rebuilt from both by scripts/build-knowledge.mjs.
+knowledge/
+src/knowledge/pages.generated.ts

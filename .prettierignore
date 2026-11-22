@@ -6,3 +6,5 @@ conformance/
 CHANGELOG.md
 package-lock.json
 test/__snapshots__/
+# Rewritten by release-please on every release (its JSON layout differs from Prettier's).
+manifest.json

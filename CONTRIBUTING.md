@@ -38,26 +38,10 @@ MCP_PUBLIC_URL=http://127.0.0.1:8080 MCP_TOKEN_SECRET=$(openssl rand -base64 48)
 ## The SDK dependency
 
 This server is built on the official [`bakbak`](https://github.com/raya-voice-ai/bakbak-js)
-JS SDK. During development before the SDK's first release, `package.json` points at a sibling
-checkout:
-
-```json
-"bakbak": "file:../bakbak-js"
-```
-
-Clone `bakbak-js` next to this repository and run `npm ci && npm run build` there first. CI
-does the same automatically while the dependency is a `file:` link, and the publish workflow
-refuses to release with one.
-
-**Before the first release**, switch to the published SDK:
-
-```sh
-npm install --save bakbak@^1.0.0-rc.1
-```
-
-Commit `package.json` and `package-lock.json`, then remove `additional_contexts` from
-`deploy/compose.yaml` (the Dockerfile needs no build context once the dependency comes from
-npm).
+JS SDK, from npm. To work against an unreleased SDK change, point the dependency at a sibling
+checkout for the duration (`npm install --save ../bakbak-js` after `npm ci && npm run build`
+there); the publish workflow refuses to release while the dependency is a `file:` link, and CI
+checks the SDK out next to this repository while it is one.
 
 ## Tests
 

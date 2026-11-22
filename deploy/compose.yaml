@@ -11,10 +11,6 @@ services:
     image: bakbak-mcp:latest
     build:
       context: ..
-      # Needed only while package.json depends on "file:../bakbak-js": a checkout
-      # of the SDK next to this repository. Remove once it uses the published SDK.
-      additional_contexts:
-        bakbak-js: ../../bakbak-js
     container_name: bakbak-mcp
     restart: unless-stopped
     environment:

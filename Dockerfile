@@ -3,16 +3,8 @@
 # Hosted Bakbak MCP server: `bakbak-mcp --http` as one bundled file on Node 24.
 #
 #   docker build -t bakbak-mcp .
-#
-# While package.json depends on a local checkout of the SDK ("file:../bakbak-js"),
-# pass that checkout as a named build context:
-#
-#   docker build --build-context bakbak-js=../bakbak-js -t bakbak-mcp .
 
 # Base images are pinned by digest (node:24-slim); update the digest deliberately.
-
-# Empty unless overridden with --build-context bakbak-js=<path>.
-FROM scratch AS bakbak-js
 
 FROM node:24-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS build
 WORKDIR /src/bakbak-mcp
@@ -20,8 +12,7 @@ COPY package.json package-lock.json ./
 COPY tsconfig.json tsconfig.build.json ./
 COPY scripts ./scripts
 COPY src ./src
-RUN --mount=type=bind,from=bakbak-js,target=/src/bakbak-js \
-    --mount=type=cache,target=/root/.npm \
+RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund \
     && node scripts/bundle.mjs /out/server.mjs
 

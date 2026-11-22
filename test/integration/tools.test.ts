@@ -346,6 +346,42 @@ describe('errors', () => {
     });
   });
 
+  it("shows the API's 422 message once, without pydantic's wrapper", async () => {
+    const message = 'Invalid request: speed: speed must be between 0.5 and 1.5 (inclusive).';
+    api.intercept = (r) =>
+      r.path === '/v1/text-to-speech'
+        ? {
+            status: 422,
+            json: {
+              detail: [
+                {
+                  type: 'value_error',
+                  loc: ['body', 'speed'],
+                  msg: 'Value error, speed must be between 0.5 and 1.5 (inclusive)',
+                  input: 3,
+                },
+              ],
+              error_code: 'invalid_request',
+              message,
+              retryable: false,
+              request_id: 'req_speed',
+            },
+          }
+        : undefined;
+    const result = await call('text_to_speech', {
+      text: 'x',
+      language: 'hi',
+      voice_id: 'v',
+      model: 'standard',
+      speed: 3,
+    });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).not.toMatch(/Value error/);
+    const details = JSON.parse(text.slice(text.indexOf('{'))) as { error: Record<string, unknown> };
+    expect(details.error).toMatchObject({ message, status: 422, error_code: 'invalid_request' });
+  });
+
   it('maps legacy and gateway shapes', async () => {
     api.intercept = (r) =>
       r.path === '/v1/text-to-speech'

@@ -65,8 +65,13 @@ describe('stdio (the bundled server)', () => {
     try {
       expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual([
         'list_voices',
+        'read_docs',
+        'search_docs',
         'text_to_speech',
       ]);
+      // The documentation is inside the bundle: no files to ship next to it.
+      const docs = await client.callTool({ name: 'read_docs', arguments: { page: 'livekit' } });
+      expect(textOf(docs)).toContain('livekit-plugins-bakbak');
       const result = await client.callTool({
         name: 'text_to_speech',
         arguments: { text: 'नमस्ते', language: 'hi' },
@@ -90,7 +95,7 @@ describe('stdio (the bundled server)', () => {
   it('starts without a key, lists tools, and explains how to set one', async () => {
     const { client, errors } = await spawnServer({});
     try {
-      expect((await client.listTools()).tools).toHaveLength(2);
+      expect((await client.listTools()).tools).toHaveLength(4);
       const result = await client.callTool({ name: 'list_voices', arguments: {} });
       expect(result.isError).toBe(true);
       expect(textOf(result)).toMatch(/BAKBAK_API_KEY/);

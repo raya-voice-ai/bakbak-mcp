@@ -343,6 +343,77 @@ exports[`tool schemas > hosted mode matches the snapshot 1`] = `
     },
     "title": "List voices",
   },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Search Bakbak docs",
+    },
+    "description": "Search Bakbak's developer documentation: the Python and JavaScript SDKs, the LiveKit Agents plugin, the HTTP, SSE and WebSocket API, error codes, audio formats, and integration guides for LiveKit, Pipecat, telephony (Twilio, Plivo, Exotel, Vonage, SIP), web and mobile apps, long texts, and other languages. Use it before writing, reviewing or debugging code that calls Bakbak, instead of guessing method names, parameters or behaviour. Returns matching sections with their page id; read a whole page or section with read_docs. Free; needs no API key.",
+    "execution": undefined,
+    "icons": undefined,
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": 6,
+          "description": "Most sections to return (1–10).",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "query": {
+          "description": "What to look for, in words or identifiers, e.g. "cancel on barge-in", "send_stream with OpenAI", "twilio mulaw", "429 concurrency".",
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+    "name": "search_docs",
+    "title": "Search Bakbak docs",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Read Bakbak docs",
+    },
+    "description": "Read a page of the Bakbak developer documentation, or one section of it. Without \`page\`, returns the index of every page. Start with page 'start-here' to choose between the SDKs, the LiveKit plugin and the raw API for a platform; 'best-practices' before finishing an integration; 'troubleshooting' when something fails. Free; needs no API key.",
+    "execution": undefined,
+    "icons": undefined,
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "page": {
+          "description": "A page id from the index or a search result, e.g. 'start-here', 'livekit', 'python-sdk', 'examples/python/llm_streaming.py'. Omit for the index.",
+          "maxLength": 200,
+          "type": "string",
+        },
+        "section": {
+          "description": "A heading of the page, to read only that section and its subsections.",
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "read_docs",
+    "title": "Read Bakbak docs",
+  },
 ]
 `;
 
@@ -693,6 +764,77 @@ exports[`tool schemas > local mode matches the snapshot 1`] = `
       "type": "object",
     },
     "title": "List voices",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Search Bakbak docs",
+    },
+    "description": "Search Bakbak's developer documentation: the Python and JavaScript SDKs, the LiveKit Agents plugin, the HTTP, SSE and WebSocket API, error codes, audio formats, and integration guides for LiveKit, Pipecat, telephony (Twilio, Plivo, Exotel, Vonage, SIP), web and mobile apps, long texts, and other languages. Use it before writing, reviewing or debugging code that calls Bakbak, instead of guessing method names, parameters or behaviour. Returns matching sections with their page id; read a whole page or section with read_docs. Free; needs no API key.",
+    "execution": undefined,
+    "icons": undefined,
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": 6,
+          "description": "Most sections to return (1–10).",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "query": {
+          "description": "What to look for, in words or identifiers, e.g. "cancel on barge-in", "send_stream with OpenAI", "twilio mulaw", "429 concurrency".",
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+    "name": "search_docs",
+    "title": "Search Bakbak docs",
+  },
+  {
+    "_meta": undefined,
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Read Bakbak docs",
+    },
+    "description": "Read a page of the Bakbak developer documentation, or one section of it. Without \`page\`, returns the index of every page. Start with page 'start-here' to choose between the SDKs, the LiveKit plugin and the raw API for a platform; 'best-practices' before finishing an integration; 'troubleshooting' when something fails. Free; needs no API key.",
+    "execution": undefined,
+    "icons": undefined,
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "page": {
+          "description": "A page id from the index or a search result, e.g. 'start-here', 'livekit', 'python-sdk', 'examples/python/llm_streaming.py'. Omit for the index.",
+          "maxLength": 200,
+          "type": "string",
+        },
+        "section": {
+          "description": "A heading of the page, to read only that section and its subsections.",
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "read_docs",
+    "title": "Read Bakbak docs",
   },
 ]
 `;

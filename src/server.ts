@@ -1,11 +1,23 @@
 /**
- * The MCP server: two tools and short instructions, identical in local and
- * hosted mode except for where audio goes.
+ * The MCP server: speech tools (text_to_speech, list_voices), developer
+ * documentation tools (search_docs, read_docs) with the same pages as
+ * resources, prompts, and short instructions. Identical in local and hosted
+ * mode except for where audio goes.
  */
 
 import { McpServer } from '@modelcontextprotocol/server';
 
 import { serverInstructions } from './instructions.js';
+import { bundledKnowledge } from './knowledge/index.js';
+import { registerPrompts } from './prompts.js';
+import {
+  READ_DOCS_DESCRIPTION,
+  SEARCH_DOCS_DESCRIPTION,
+  readDocs,
+  readDocsInput,
+  searchDocs,
+  searchDocsInput,
+} from './tools/docs.js';
 import type { ToolEnv } from './tools/env.js';
 import type { ServerMode } from './tools/errors.js';
 import { LIST_VOICES_DESCRIPTION, listVoices } from './tools/listVoices.js';
@@ -20,7 +32,7 @@ import {
 import { textToSpeech, textToSpeechDescription } from './tools/textToSpeech.js';
 import { PACKAGE_NAME, VERSION } from './version.js';
 
-export const TOOL_NAMES = ['text_to_speech', 'list_voices'] as const;
+export const TOOL_NAMES = ['text_to_speech', 'list_voices', 'search_docs', 'read_docs'] as const;
 
 /** Local mode can replace an existing file (`overwrite`), so it is destructive there. */
 function ttsAnnotations(mode: ServerMode) {
@@ -32,6 +44,14 @@ function ttsAnnotations(mode: ServerMode) {
     openWorldHint: true,
   };
 }
+
+/** The documentation is bundled: read-only, and no outside world is touched. */
+const DOCS_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+};
 
 const VOICES_ANNOTATIONS = {
   title: 'List voices',
@@ -49,7 +69,10 @@ export function createBakbakServer(env: ToolEnv): McpServer {
       version: VERSION,
       websiteUrl: 'https://bakbak.getraya.app',
     },
-    { instructions: serverInstructions(env.mode), capabilities: { tools: {} } },
+    {
+      instructions: serverInstructions(env.mode),
+      capabilities: { tools: {}, prompts: {}, resources: {}, completions: {} },
+    },
   );
 
   if (env.mode === 'local') {
@@ -89,6 +112,39 @@ export function createBakbakServer(env: ToolEnv): McpServer {
     },
     (args, ctx) => listVoices(args, env, ctx),
   );
+
+  server.registerTool(
+    'search_docs',
+    {
+      title: 'Search Bakbak docs',
+      description: SEARCH_DOCS_DESCRIPTION,
+      inputSchema: searchDocsInput,
+      annotations: { title: 'Search Bakbak docs', ...DOCS_ANNOTATIONS },
+    },
+    (args) => searchDocs(args, env),
+  );
+
+  server.registerTool(
+    'read_docs',
+    {
+      title: 'Read Bakbak docs',
+      description: READ_DOCS_DESCRIPTION,
+      inputSchema: readDocsInput,
+      annotations: { title: 'Read Bakbak docs', ...DOCS_ANNOTATIONS },
+    },
+    (args) => readDocs(args, env),
+  );
+
+  for (const page of bundledKnowledge().pages) {
+    server.registerResource(
+      page.id,
+      `bakbak://docs/${page.id}`,
+      { title: page.title, description: page.description, mimeType: 'text/markdown' },
+      (uri) => ({ contents: [{ uri: uri.href, mimeType: 'text/markdown', text: page.markdown }] }),
+    );
+  }
+
+  registerPrompts(server);
 
   return server;
 }

@@ -245,7 +245,14 @@ describe('claude.ai connector flow', () => {
       expect(client.getProtocolEra()).toBe('legacy');
       expect(client.getInstructions()).toMatch(/download link/);
       const { tools } = await client.listTools();
-      expect(tools.map((t) => t.name).sort()).toEqual(['list_voices', 'text_to_speech']);
+      expect(tools.map((t) => t.name).sort()).toEqual([
+        'list_voices',
+        'read_docs',
+        'search_docs',
+        'text_to_speech',
+      ]);
+      const docs = await client.callTool({ name: 'read_docs', arguments: { page: 'start-here' } });
+      expect(docs.isError).toBeFalsy();
       const tts = tools.find((t) => t.name === 'text_to_speech')!;
       expect(Object.keys(tts.inputSchema.properties ?? {})).not.toContain('output_path');
       expect(tts.annotations?.destructiveHint).toBe(false);

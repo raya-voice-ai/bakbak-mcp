@@ -340,14 +340,17 @@ Bakbak's privacy policy: <https://bakbak.si/privacy-policy>.
 
 ## Self-hosting
 
-`bakbak-mcp --http` runs the hosted server. The [`deploy/`](deploy/README.md) directory has a
+`bakbak-mcp --http` runs the hosted server. The
+[`deploy/`](https://github.com/raya-voice-ai/bakbak-mcp/tree/main/deploy) directory has a
 Dockerfile-based compose file, a Caddy example and the operational notes (reverse proxies,
 Cloudflare, scaling, secret rotation).
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](https://github.com/raya-voice-ai/bakbak-mcp/blob/main/CONTRIBUTING.md).
+Security issues: [SECURITY.md](https://github.com/raya-voice-ai/bakbak-mcp/blob/main/SECURITY.md).
 
 ## License
 
-[Apache-2.0](LICENSE). Copyright 2026 Raya Voice AI.
+[Apache-2.0](https://github.com/raya-voice-ai/bakbak-mcp/blob/main/LICENSE).
+Copyright 2026 Raya Voice AI.

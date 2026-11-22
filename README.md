@@ -19,7 +19,8 @@ Both offer the same two tools: [`text_to_speech`](#text_to_speech) and
 <https://docs.litwizlabs.com/documentation/tts-mcp>.
 
 **Contents:** [Get an API key](#get-an-api-key) · [Set up your client](#set-up-your-client) ·
-[Tools](#tools) · [Example prompts](#example-prompts) · [Configuration](#configuration) ·
+[Tools](#tools) · [Languages and models](#languages-and-models) ·
+[Example prompts](#example-prompts) · [Configuration](#configuration) ·
 [Errors](#errors) · [Retries and timeouts](#retries-and-timeouts) ·
 [Latency tips](#latency-tips) · [Privacy](#privacy) · [Self-hosting](#self-hosting) ·
 [Development](#development)
@@ -187,7 +188,7 @@ Converts text to speech and saves it (local) or returns a link (hosted). Uses cr
 | `language`      | string  | required                                                         | `hi`, `mr`, `te`, `kn`, `bn`, `as`, `gu`, `ne`, `ml`, `ta`, `pa`, `en`, `en-in` or `en-us` (and any language the API adds). English m1 voices use `en`; standard English voices use `en-in` or `en-us`. |
 | `voice_id`      | string  | first voice for the language                                     | A voice id from `list_voices`.                                                                                                                                                                          |
 | `model`         | string  | the voice's model                                                | `standard` or `m1`. Must be the voice's own model.                                                                                                                                                      |
-| `speed`         | number  | `1.0`                                                            | Speaking rate, 0.5 to 1.5.                                                                                                                                                                              |
+| `speed`         | number  | `1.0`                                                            | Speaking rate, 0.5 to 1.5. Standard voices only: m1 voices accept it and speak at their own pace.                                                                                                       |
 | `output_format` | object  | `{"container":"wav","encoding":"pcm_s16le","sample_rate":24000}` | `container` `wav`, `mp3` or `raw`; `encoding` `pcm_s16le`, `pcm_f32le`, `pcm_mulaw` or `pcm_alaw` (required for wav and raw, omitted for mp3); `sample_rate` 8000, 16000, 22050 or 24000.               |
 | `output_path`   | string  | a new file                                                       | Local mode only. An absolute path, or one relative to the output directory (and inside it). Its directory must exist and its extension must match the format.                                           |
 | `overwrite`     | boolean | `false`                                                          | Local mode only. Replace `output_path` if it exists; otherwise an existing file is never touched.                                                                                                       |
@@ -229,11 +230,22 @@ Lists voices. Free. Read-only.
 Returns `{ "voices": [{ "id", "name", "language", "model" }], "count", "total" }`, where
 `total` counts every match before the limit.
 
+## Languages and models
+
+| Model      | Languages                                                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `m1`       | Hindi `hi`, English `en`, Kannada `kn`                                                                                                                                               |
+| `standard` | Hindi `hi`, Indian English `en-in`, US English `en-us`, Assamese `as`, Bengali `bn`, Gujarati `gu`, Kannada `kn`, Malayalam `ml`, Marathi `mr`, Nepali `ne`, Tamil `ta`, Telugu `te` |
+
+That is the voice catalog of 22 November 2026; `list_voices` is the source of truth. Punjabi
+(`pa`) is accepted by the API but has no voice yet. `speed` changes `standard` voices only.
+
 ## Example prompts
 
 - "List the Hindi voices."
 - "Say 'आपका ऑर्डर कल तक पहुँच जाएगा।' in Hindi with an m1 voice."
-- "Turn this blog post into an MP3 narration, a little slower than normal." (long text is fine)
+- "Turn this blog post into a narration with a standard voice, a little slower than normal."
+  (long text is fine; `speed` changes standard voices only)
 - "Make an 8 kHz μ-law version of this IVR greeting in Tamil for our phone system:
   `output_format` raw, `pcm_mulaw`, 8000."
 - "Welcome राहुल शर्मा to the meetup in English and save it to `~/Desktop/welcome.wav`."
